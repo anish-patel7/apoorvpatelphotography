@@ -38,9 +38,9 @@ export default function PortfolioDetail() {
 
   return (
     <>
-      <section className="pt-28 pb-8 bg-brand-dark">
+      <section className="pt-28 pb-8 bg-background">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Link to="/portfolio" className="inline-flex items-center gap-2 text-white/60 hover:text-brand-saffron transition-colors mb-8">
+          <Link to="/portfolio" className="inline-flex items-center gap-2 text-on-surface-variant hover:text-tertiary transition-colors mb-8">
             <ArrowLeft size={18} /> Back to Portfolio
           </Link>
 
@@ -56,17 +56,17 @@ export default function PortfolioDetail() {
               <h1 className="font-display text-[40px] sm:text-[48px] lg:text-[56px] text-on-background font-semibold mb-4 leading-tight">{project.title}</h1>
               <p className="font-body text-[16px] text-on-surface-variant leading-relaxed mb-6">{project.description}</p>
 
-              <div className="flex flex-wrap gap-6 text-sm text-white/50">
-                <span className="flex items-center gap-1.5"><MapPin size={16} className="text-brand-saffron" /> {project.location}</span>
-                <span className="flex items-center gap-1.5"><Calendar size={16} className="text-brand-saffron" /> {project.date}</span>
+              <div className="flex flex-wrap gap-6 text-sm text-on-surface-variant">
+                <span className="flex items-center gap-1.5"><MapPin size={16} className="text-tertiary" /> {project.location}</span>
+                <span className="flex items-center gap-1.5"><Calendar size={16} className="text-tertiary" /> {project.date}</span>
               </div>
             </div>
 
             <div className="flex flex-row lg:flex-col gap-3">
-              <button onClick={handleShare} className="px-5 py-2.5 border border-white/20 rounded-full text-sm hover:bg-white/10 transition-colors flex items-center gap-2">
+              <button onClick={handleShare} className="px-5 py-2.5 border border-outline-variant/30 rounded-sm text-sm hover:bg-surface-container transition-colors flex items-center gap-2 text-on-surface-variant">
                 <Share2 size={16} /> Share
               </button>
-              <Link to="/contact" className="px-5 py-2.5 bg-brand-saffron text-black rounded-full text-sm font-semibold hover:bg-brand-gold transition-colors flex items-center gap-2">
+              <Link to="/contact" className="px-5 py-2.5 bg-tertiary text-background rounded-sm text-sm font-semibold hover:bg-tertiary/80 transition-colors flex items-center gap-2">
                 <MessageCircle size={16} /> Get a Quote
               </Link>
             </div>
@@ -74,15 +74,15 @@ export default function PortfolioDetail() {
         </div>
       </section>
 
-      <section className="py-12 bg-brand-dark">
+      <section className="py-12 bg-background">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="font-heading text-2xl font-semibold mb-6">Gallery</h2>
+          <h2 className="font-display text-[32px] text-on-background font-semibold mb-6">Gallery</h2>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {project.images.map((img, i) => (
               <button
                 key={i}
                 onClick={() => setLightboxIndex(i)}
-                className="aspect-square rounded-xl overflow-hidden hover:opacity-80 transition-opacity cursor-pointer"
+                className="aspect-square rounded-sm overflow-hidden hover:opacity-80 transition-opacity cursor-pointer border border-outline-variant/10"
               >
                 <img src={img} alt={`${project.title} - ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
               </button>
@@ -92,18 +92,18 @@ export default function PortfolioDetail() {
       </section>
 
       {related.length > 0 && (
-        <section className="py-16 bg-brand-charcoal">
+        <section className="py-16 bg-surface-container-low">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <h2 className="font-heading text-2xl font-semibold mb-8">Related Projects</h2>
+            <h2 className="font-display text-[32px] text-on-background font-semibold mb-8">Related Projects</h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
               {related.map(p => (
-                <Link to={`/portfolio/${p.id}`} key={p.id} className="group rounded-2xl overflow-hidden">
+                <Link to={`/portfolio/${p.id}`} key={p.id} className="group rounded-sm overflow-hidden border border-outline-variant/10">
                   <div className="aspect-[4/3] overflow-hidden">
                     <img src={p.cover_image} alt={p.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" loading="lazy" />
                   </div>
-                  <div className="p-4 bg-brand-dark">
-                    <h3 className="font-heading font-semibold group-hover:text-brand-saffron transition-colors">{p.title}</h3>
-                    <p className="text-white/50 text-sm">{p.location}</p>
+                  <div className="p-4 bg-surface-container">
+                    <h3 className="font-display font-semibold text-on-background group-hover:text-tertiary transition-colors">{p.title}</h3>
+                    <p className="text-on-surface-variant text-sm">{p.location}</p>
                   </div>
                 </Link>
               ))}
