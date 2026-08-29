@@ -1,10 +1,23 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import type { Database } from '../lib/database.types';
 
-type Project = Database['public']['Tables']['portfolio_projects']['Row'];
-type ProjectInsert = Database['public']['Tables']['portfolio_projects']['Insert'];
-type ProjectUpdate = Database['public']['Tables']['portfolio_projects']['Update'];
+interface Project {
+  id: string;
+  title: string;
+  slug: string;
+  category: string;
+  cover_image: string;
+  images: string[];
+  video_url: string | null;
+  reel_url: string | null;
+  description: string;
+  date: string;
+  location: string;
+  featured: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
 
 export function usePortfolio(category?: string) {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -24,7 +37,7 @@ export function usePortfolio(category?: string) {
 
     const { data, error } = await query;
     if (error) console.error('Portfolio fetch error:', error);
-    setProjects(data ?? []);
+    setProjects((data as Project[]) ?? []);
     setLoading(false);
   }, [category]);
 
@@ -45,7 +58,7 @@ export function usePortfolioProject(slug: string) {
       .single()
       .then(({ data, error }) => {
         if (error) console.error('Project fetch error:', error);
-        setProject(data);
+        setProject(data as Project | null);
         setLoading(false);
       });
   }, [slug]);
@@ -66,7 +79,7 @@ export function useFeaturedPortfolio() {
       .limit(6)
       .then(({ data, error }) => {
         if (error) console.error('Featured fetch error:', error);
-        setProjects(data ?? []);
+        setProjects((data as Project[]) ?? []);
         setLoading(false);
       });
   }, []);
@@ -87,22 +100,22 @@ export function usePortfolioAdmin() {
       .order('created_at', { ascending: false });
 
     if (error) console.error('Portfolio admin fetch error:', error);
-    setProjects(data ?? []);
+    setProjects((data as Project[]) ?? []);
     setLoading(false);
   }, []);
 
   useEffect(() => { fetch(); }, [fetch]);
 
-  const create = async (project: ProjectInsert) => {
-    const { error } = await supabase.from('portfolio_projects').insert(project);
+  const create = async (project: Partial<Project>) => {
+    const { error } = await supabase.from('portfolio_projects').insert([project] as any);
     if (error) throw error;
     await fetch();
   };
 
-  const update = async (id: string, updates: ProjectUpdate) => {
+  const update = async (id: string, updates: Partial<Project>) => {
     const { error } = await supabase
       .from('portfolio_projects')
-      .update(updates)
+      .update(updates as any)
       .eq('id', id);
     if (error) throw error;
     await fetch();

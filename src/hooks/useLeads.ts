@@ -1,18 +1,39 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import type { Database, LeadStatus } from '../lib/database.types';
+import type { LeadStatus } from '../lib/database.types';
 
-type Lead = Database['public']['Tables']['leads']['Row'];
-type LeadInsert = Database['public']['Tables']['leads']['Insert'];
-type LeadNote = Database['public']['Tables']['lead_notes']['Row'];
+interface Lead {
+  id: string;
+  name: string;
+  mobile: string;
+  whatsapp: string;
+  email: string;
+  service_type: string;
+  event_type: string | null;
+  event_date: string | null;
+  location: string | null;
+  budget: string | null;
+  message: string;
+  status: LeadStatus;
+  source: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface LeadNote {
+  id: string;
+  lead_id: string;
+  content: string;
+  created_at: string;
+}
 
 export function useSubmitInquiry() {
   const [submitting, setSubmitting] = useState(false);
 
-  const submit = async (data: LeadInsert) => {
+  const submit = async (data: Partial<Lead>) => {
     setSubmitting(true);
     try {
-      const { error } = await supabase.from('leads').insert(data);
+      const { error } = await supabase.from('leads').insert([data] as any);
       if (error) throw error;
       return true;
     } catch (err) {
@@ -47,14 +68,14 @@ export function useLeadsAdmin(statusFilter?: LeadStatus, search?: string) {
 
     const { data, error } = await query;
     if (error) console.error('Leads fetch error:', error);
-    setLeads(data ?? []);
+    setLeads((data as Lead[]) ?? []);
     setLoading(false);
   }, [statusFilter, search]);
 
   useEffect(() => { fetch(); }, [fetch]);
 
   const updateStatus = async (id: string, status: LeadStatus) => {
-    const { error } = await supabase.from('leads').update({ status }).eq('id', id);
+    const { error } = await supabase.from('leads').update({ status } as any).eq('id', id);
     if (error) throw error;
     await fetch();
   };
@@ -80,7 +101,7 @@ export function useLeadNotes(leadId: string) {
       .order('created_at', { ascending: false });
 
     if (error) console.error('Lead notes fetch error:', error);
-    setNotes(data ?? []);
+    setNotes((data as LeadNote[]) ?? []);
     setLoading(false);
   }, [leadId]);
 
@@ -89,7 +110,7 @@ export function useLeadNotes(leadId: string) {
   const addNote = async (content: string) => {
     const { error } = await supabase
       .from('lead_notes')
-      .insert({ lead_id: leadId, content });
+      .insert([{ lead_id: leadId, content }] as any);
     if (error) throw error;
     await fetch();
   };
@@ -119,7 +140,7 @@ export function useLeadStats() {
         return;
       }
 
-      const rows = data ?? [];
+      const rows = (data as any[]) ?? [];
       setStats({
         total: rows.length,
         new: rows.filter(r => r.status === 'new').length,

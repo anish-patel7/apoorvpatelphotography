@@ -13,7 +13,7 @@ export function useSiteSettings<T = Record<string, unknown>>(key: string) {
       .single()
       .then(({ data, error }) => {
         if (error) console.error(`Settings fetch error (${key}):`, error);
-        setValue((data?.value as T) ?? null);
+        setValue(((data as any)?.value as T) ?? null);
         setLoading(false);
       });
   }, [key]);
@@ -21,7 +21,7 @@ export function useSiteSettings<T = Record<string, unknown>>(key: string) {
   const update = useCallback(async (newValue: T) => {
     const { error } = await supabase
       .from('site_settings')
-      .upsert({ key, value: newValue as Record<string, unknown> });
+      .upsert([{ key, value: newValue as Record<string, unknown> }] as any);
     if (error) throw error;
     setValue(newValue);
   }, [key]);

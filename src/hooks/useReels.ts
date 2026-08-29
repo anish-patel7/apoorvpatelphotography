@@ -1,10 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import type { Database } from '../lib/database.types';
 
-type Reel = Database['public']['Tables']['instagram_reels']['Row'];
-type ReelInsert = Database['public']['Tables']['instagram_reels']['Insert'];
-type ReelUpdate = Database['public']['Tables']['instagram_reels']['Update'];
+interface Reel {
+  id: string;
+  thumbnail: string;
+  url: string;
+  title: string;
+  featured: boolean;
+  sort_order: number;
+  created_at: string;
+}
 
 export function useReels() {
   const [reels, setReels] = useState<Reel[]>([]);
@@ -19,7 +24,7 @@ export function useReels() {
       .limit(6)
       .then(({ data, error }) => {
         if (error) console.error('Reels fetch error:', error);
-        setReels(data ?? []);
+        setReels((data as Reel[]) ?? []);
         setLoading(false);
       });
   }, []);
@@ -39,20 +44,20 @@ export function useReelsAdmin() {
       .order('sort_order');
 
     if (error) console.error('Reels admin fetch error:', error);
-    setReels(data ?? []);
+    setReels((data as Reel[]) ?? []);
     setLoading(false);
   }, []);
 
   useEffect(() => { fetch(); }, [fetch]);
 
-  const create = async (reel: ReelInsert) => {
-    const { error } = await supabase.from('instagram_reels').insert(reel);
+  const create = async (reel: Partial<Reel>) => {
+    const { error } = await supabase.from('instagram_reels').insert([reel] as any);
     if (error) throw error;
     await fetch();
   };
 
-  const update = async (id: string, updates: ReelUpdate) => {
-    const { error } = await supabase.from('instagram_reels').update(updates).eq('id', id);
+  const update = async (id: string, updates: Partial<Reel>) => {
+    const { error } = await supabase.from('instagram_reels').update(updates as any).eq('id', id);
     if (error) throw error;
     await fetch();
   };

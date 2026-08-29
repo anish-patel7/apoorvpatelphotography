@@ -1,10 +1,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import type { Database } from '../lib/database.types';
 
-type Service = Database['public']['Tables']['services']['Row'];
-type ServiceInsert = Database['public']['Tables']['services']['Insert'];
-type ServiceUpdate = Database['public']['Tables']['services']['Update'];
+interface Service {
+  id: string;
+  title: string;
+  category: 'photography' | 'videography' | 'editing';
+  description: string;
+  icon: string;
+  features: string[];
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
 
 export function useServices(category?: string) {
   const [services, setServices] = useState<Service[]>([]);
@@ -23,7 +30,7 @@ export function useServices(category?: string) {
 
     const { data, error } = await query;
     if (error) console.error('Services fetch error:', error);
-    setServices(data ?? []);
+    setServices((data as Service[]) ?? []);
     setLoading(false);
   }, [category]);
 
@@ -45,20 +52,20 @@ export function useServicesAdmin() {
       .order('sort_order');
 
     if (error) console.error('Services admin fetch error:', error);
-    setServices(data ?? []);
+    setServices((data as Service[]) ?? []);
     setLoading(false);
   }, []);
 
   useEffect(() => { fetch(); }, [fetch]);
 
-  const create = async (service: ServiceInsert) => {
-    const { error } = await supabase.from('services').insert(service);
+  const create = async (service: Partial<Service>) => {
+    const { error } = await supabase.from('services').insert([service] as any);
     if (error) throw error;
     await fetch();
   };
 
-  const update = async (id: string, updates: ServiceUpdate) => {
-    const { error } = await supabase.from('services').update(updates).eq('id', id);
+  const update = async (id: string, updates: Partial<Service>) => {
+    const { error } = await supabase.from('services').update(updates as any).eq('id', id);
     if (error) throw error;
     await fetch();
   };

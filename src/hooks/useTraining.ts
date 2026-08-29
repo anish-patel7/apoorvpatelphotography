@@ -1,10 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import type { Database } from '../lib/database.types';
 
-type Course = Database['public']['Tables']['training_courses']['Row'];
-type CourseInsert = Database['public']['Tables']['training_courses']['Insert'];
-type CourseUpdate = Database['public']['Tables']['training_courses']['Update'];
+interface Course {
+  id: string;
+  title: string;
+  description: string;
+  duration: string;
+  level: string;
+  curriculum: string[];
+  tools: string[];
+  fee: string;
+  mode: string;
+  image: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
 
 export function useTraining() {
   const [courses, setCourses] = useState<Course[]>([]);
@@ -18,7 +29,7 @@ export function useTraining() {
       .order('sort_order');
 
     if (error) console.error('Training fetch error:', error);
-    setCourses(data ?? []);
+    setCourses((data as Course[]) ?? []);
     setLoading(false);
   }, []);
 
@@ -39,20 +50,20 @@ export function useTrainingAdmin() {
       .order('sort_order');
 
     if (error) console.error('Training admin fetch error:', error);
-    setCourses(data ?? []);
+    setCourses((data as Course[]) ?? []);
     setLoading(false);
   }, []);
 
   useEffect(() => { fetch(); }, [fetch]);
 
-  const create = async (course: CourseInsert) => {
-    const { error } = await supabase.from('training_courses').insert(course);
+  const create = async (course: Partial<Course>) => {
+    const { error } = await supabase.from('training_courses').insert([course] as any);
     if (error) throw error;
     await fetch();
   };
 
-  const update = async (id: string, updates: CourseUpdate) => {
-    const { error } = await supabase.from('training_courses').update(updates).eq('id', id);
+  const update = async (id: string, updates: Partial<Course>) => {
+    const { error } = await supabase.from('training_courses').update(updates as any).eq('id', id);
     if (error) throw error;
     await fetch();
   };

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Edit3, Trash2, Eye, Star, X } from 'lucide-react';
+import { Plus, Edit3, Trash2, Star, X } from 'lucide-react';
 import { portfolioProjects, portfolioCategories } from '../../data/portfolio';
 import type { PortfolioProject } from '../../types';
 

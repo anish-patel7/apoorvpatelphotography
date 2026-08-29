@@ -1,10 +1,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import type { Database } from '../lib/database.types';
 
-type Testimonial = Database['public']['Tables']['testimonials']['Row'];
-type TestimonialInsert = Database['public']['Tables']['testimonials']['Insert'];
-type TestimonialUpdate = Database['public']['Tables']['testimonials']['Update'];
+interface Testimonial {
+  id: string;
+  name: string;
+  review: string;
+  service: string;
+  date: string;
+  rating: number;
+  approved: boolean;
+  sort_order: number;
+  created_at: string;
+}
 
 export function useTestimonials() {
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
@@ -18,7 +25,7 @@ export function useTestimonials() {
       .order('sort_order')
       .then(({ data, error }) => {
         if (error) console.error('Testimonials fetch error:', error);
-        setTestimonials(data ?? []);
+        setTestimonials((data as Testimonial[]) ?? []);
         setLoading(false);
       });
   }, []);
@@ -38,20 +45,20 @@ export function useTestimonialsAdmin() {
       .order('sort_order');
 
     if (error) console.error('Testimonials admin fetch error:', error);
-    setTestimonials(data ?? []);
+    setTestimonials((data as Testimonial[]) ?? []);
     setLoading(false);
   }, []);
 
   useEffect(() => { fetch(); }, [fetch]);
 
-  const create = async (testimonial: TestimonialInsert) => {
-    const { error } = await supabase.from('testimonials').insert(testimonial);
+  const create = async (testimonial: Partial<Testimonial>) => {
+    const { error } = await supabase.from('testimonials').insert([testimonial] as any);
     if (error) throw error;
     await fetch();
   };
 
-  const update = async (id: string, updates: TestimonialUpdate) => {
-    const { error } = await supabase.from('testimonials').update(updates).eq('id', id);
+  const update = async (id: string, updates: Partial<Testimonial>) => {
+    const { error } = await supabase.from('testimonials').update(updates as any).eq('id', id);
     if (error) throw error;
     await fetch();
   };
