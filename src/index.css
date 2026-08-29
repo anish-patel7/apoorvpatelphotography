@@ -1,18 +1,49 @@
 @import "tailwindcss";
 
 @theme {
-  --color-brand-saffron: #FF9933;
-  --color-brand-green: #138808;
-  --color-brand-navy: #000080;
-  --color-brand-gold: #D4AF37;
-  --color-brand-dark: #0a0a0a;
-  --color-brand-charcoal: #1a1a1a;
-  --color-brand-gray: #2a2a2a;
-  --color-brand-light: #f5f5f5;
-  --color-brand-muted: #888888;
-  --font-heading: 'Playfair Display', Georgia, serif;
-  --font-body: 'Inter', system-ui, sans-serif;
-  --font-script: 'Dancing Script', cursive;
+  /* Material Design 3 — Dark Mode Palette */
+  --color-background: #141313;
+  --color-surface: #141313;
+  --color-surface-dim: #141313;
+  --color-surface-bright: #3a3939;
+  --color-surface-container-lowest: #0e0e0e;
+  --color-surface-container-low: #1c1b1b;
+  --color-surface-container: #201f1f;
+  --color-surface-container-high: #2b2a2a;
+  --color-surface-container-highest: #353434;
+  --color-surface-variant: #353434;
+
+  --color-on-surface: #e5e2e1;
+  --color-on-surface-variant: #c4c7c7;
+  --color-on-background: #e5e2e1;
+
+  --color-primary: #c9c6c5;
+  --color-on-primary: #313030;
+  --color-primary-container: #0a0a0a;
+  --color-on-primary-container: #7b7979;
+
+  --color-secondary: #c6c6c7;
+  --color-on-secondary: #2f3131;
+  --color-secondary-container: #454747;
+
+  --color-tertiary: #ffb77a;
+  --color-on-tertiary: #4c2700;
+  --color-tertiary-container: #150700;
+  --color-on-tertiary-container: #b76500;
+  --color-tertiary-fixed: #ffdcc2;
+
+  --color-outline: #8e9192;
+  --color-outline-variant: #444748;
+
+  --color-error: #ffb4ab;
+  --color-on-error: #690005;
+
+  --color-inverse-surface: #e5e2e1;
+  --color-inverse-on-surface: #313030;
+
+  /* Typography */
+  --font-display: 'Bodoni Moda', Georgia, serif;
+  --font-body: 'Montserrat', system-ui, sans-serif;
 }
 
 html {
@@ -21,27 +52,68 @@ html {
 
 body {
   font-family: var(--font-body);
-  background-color: var(--color-brand-dark);
-  color: #ffffff;
+  background-color: var(--color-background);
+  color: var(--color-on-background);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 ::selection {
-  background-color: var(--color-brand-saffron);
-  color: #000;
+  background-color: var(--color-tertiary);
+  color: var(--color-tertiary-container);
 }
 
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--color-brand-dark);
+  background: var(--color-background);
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-brand-gray);
-  border-radius: 4px;
+  background: var(--color-surface-container-high);
+  border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-brand-muted);
+  background: var(--color-outline);
+}
+
+/* Smooth fade-in animation */
+.fade-in {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 800ms ease, transform 800ms ease;
+}
+.fade-in.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Gallery card interactions */
+.gallery-card {
+  overflow: hidden;
+  position: relative;
+}
+.gallery-card img {
+  transition: transform 800ms ease;
+}
+.gallery-card:hover img {
+  transform: scale(1.05);
+}
+.gallery-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(10, 10, 10, 0.9) 0%, rgba(10, 10, 10, 0) 60%);
+  opacity: 0;
+  transition: opacity 500ms ease;
+}
+.gallery-card:hover .gallery-overlay {
+  opacity: 1;
+}
+
+/* Cinematic button base */
+.btn-cinematic {
+  transition: all 400ms ease-in-out;
+}
+.btn-cinematic:hover {
+  transform: scale(1.02);
 }

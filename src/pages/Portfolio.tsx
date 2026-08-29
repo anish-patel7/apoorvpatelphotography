@@ -1,6 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowUpRight, Filter } from 'lucide-react';
 import { portfolioProjects, portfolioCategories } from '../data/portfolio';
 
 export default function Portfolio() {
@@ -10,78 +9,91 @@ export default function Portfolio() {
     ? portfolioProjects
     : portfolioProjects.filter(p => p.category === activeCategory);
 
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      entries => entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); }),
+      { threshold: 0.1 }
+    );
+    document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+    return () => observer.disconnect();
+  }, []);
+
+  const gridSpans = [
+    'md:col-span-8 row-span-1',
+    'md:col-span-4 md:row-span-2',
+    'md:col-span-4 row-span-1',
+    'md:col-span-4 row-span-1',
+    'md:col-span-6 row-span-1',
+    'md:col-span-6 row-span-1',
+    'md:col-span-12 row-span-1',
+    'md:col-span-4 row-span-1',
+  ];
+
   return (
-    <>
-      <section className="pt-32 pb-12 bg-brand-dark">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <p className="text-brand-saffron text-sm font-semibold tracking-widest uppercase mb-3">Our Work</p>
-            <h1 className="font-heading text-4xl sm:text-5xl lg:text-6xl font-bold mb-4">Portfolio</h1>
-            <p className="text-white/50 max-w-2xl mx-auto">
-              Explore our collection of photography, videography, and creative projects from across India and the UK.
-            </p>
-          </div>
+    <main className="flex-grow pt-[120px]">
+      <header className="px-5 md:px-16 py-[120px] max-w-[1440px] mx-auto text-center">
+        <h1 className="font-display text-[40px] md:text-[72px] text-on-background mb-6 leading-[1.1] tracking-[-0.02em] font-semibold">
+          Our Portfolio
+        </h1>
+        <p className="font-body text-[18px] text-on-surface-variant max-w-2xl mx-auto leading-relaxed">
+          A curated collection of moments, framed with precision and inspired by innovation. Explore our visual stories across various disciplines.
+        </p>
+      </header>
 
-          <div className="flex items-center gap-2 mb-2">
-            <Filter size={16} className="text-brand-saffron" />
-            <span className="text-sm text-white/50">Filter by category:</span>
-          </div>
-          <div className="flex flex-wrap gap-2 mb-12">
-            {portfolioCategories.map(cat => (
-              <button
-                key={cat}
-                onClick={() => setActiveCategory(cat)}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                  activeCategory === cat
-                    ? 'bg-brand-saffron text-black'
-                    : 'bg-white/5 text-white/70 hover:bg-white/10'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
+      <section className="px-5 md:px-16 mb-16 max-w-[1440px] mx-auto overflow-x-auto">
+        <div className="flex space-x-8 font-body text-[12px] font-bold tracking-[0.15em] uppercase text-on-surface-variant min-w-max pb-2">
+          {portfolioCategories.map(cat => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              className={`pb-2 transition-colors ${
+                activeCategory === cat
+                  ? 'text-on-surface border-b-2 border-tertiary'
+                  : 'hover:text-on-surface'
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
         </div>
       </section>
 
-      <section className="pb-20 bg-brand-dark">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {filtered.length === 0 ? (
-            <div className="text-center py-20">
-              <p className="text-white/50 text-lg">No projects found in this category yet.</p>
-            </div>
-          ) : (
-            <div className="columns-1 sm:columns-2 lg:columns-3 gap-6 space-y-6">
-              {filtered.map(project => (
-                <Link
-                  to={`/portfolio/${project.id}`}
-                  key={project.id}
-                  className="group block break-inside-avoid rounded-2xl overflow-hidden relative"
-                >
-                  <img
-                    src={project.coverImage}
-                    alt={project.title}
-                    className="w-full object-cover group-hover:scale-105 transition-transform duration-700"
-                    loading="lazy"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    <div className="absolute bottom-0 left-0 right-0 p-6">
-                      <span className="inline-block px-3 py-1 bg-brand-saffron/90 text-black text-xs font-semibold rounded-full mb-2">
-                        {project.category}
-                      </span>
-                      <h3 className="font-heading text-xl font-semibold flex items-center gap-2">
-                        {project.title}
-                        <ArrowUpRight size={18} />
-                      </h3>
-                      <p className="text-white/60 text-sm mt-1">{project.location} &middot; {project.date}</p>
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
+      <section className="px-5 md:px-16 pb-[120px] max-w-[1440px] mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-8 auto-rows-[300px] md:auto-rows-[400px]">
+          {filtered.map((project, i) => (
+            <Link
+              key={project.id}
+              to={`/portfolio/${project.id}`}
+              className={`${gridSpans[i % gridSpans.length]} relative group cursor-pointer overflow-hidden rounded-lg bg-surface-container border border-white/10`}
+            >
+              <div
+                className="absolute inset-0 bg-cover bg-center transition-transform duration-700 ease-out group-hover:scale-105"
+                style={{ backgroundImage: `url('${project.coverImage}')` }}
+              />
+              <div className="absolute inset-0 gallery-overlay opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex flex-col justify-end p-8">
+                <span className="font-body text-[12px] font-bold tracking-[0.15em] uppercase text-tertiary mb-2">
+                  {project.category}
+                </span>
+                <h3 className="font-display text-[32px] text-on-background leading-tight">
+                  {project.title}
+                </h3>
+              </div>
+            </Link>
+          ))}
         </div>
       </section>
-    </>
+
+      <section className="py-[120px] bg-surface-container-low text-center px-5">
+        <h2 className="font-display text-[32px] md:text-[48px] text-on-background mb-8 leading-tight">
+          Ready for your own shoot?
+        </h2>
+        <Link
+          to="/contact"
+          className="inline-block bg-on-background text-background font-body text-[14px] font-semibold tracking-[0.05em] px-8 py-4 rounded-sm btn-cinematic hover:bg-tertiary-fixed hover:text-on-tertiary"
+        >
+          Get a Quote
+        </Link>
+      </section>
+    </main>
   );
 }

@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, MessageCircle } from 'lucide-react';
-import InstagramIcon from '../icons/InstagramIcon';
 
 const navLinks = [
   { to: '/', label: 'Home' },
@@ -25,102 +23,112 @@ export default function Header() {
 
   useEffect(() => { setIsOpen(false); }, [location]);
 
+  const isActive = (path: string) => location.pathname === path;
+
   return (
-    <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'bg-brand-dark/95 backdrop-blur-md shadow-lg' : 'bg-transparent'}`}>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-20">
-          <Link to="/" className="flex items-center gap-3">
-            <img src="/images/logo.png" alt="Apoorvpatel Photography" className="h-14 w-auto" />
-          </Link>
+    <nav className={`fixed top-0 w-full z-50 border-b transition-all duration-300 ${
+      scrolled ? 'bg-background/80 backdrop-blur-xl border-outline-variant/10' : 'bg-transparent border-transparent'
+    }`}>
+      <div className="flex justify-between items-center px-5 md:px-16 py-6 max-w-[1440px] mx-auto">
+        <Link to="/" className="font-display text-[28px] md:text-[32px] text-on-background tracking-tight leading-tight">
+          Apoorvpatel Photography
+        </Link>
 
-          <nav className="hidden lg:flex items-center gap-8">
-            {navLinks.map(link => (
-              <Link
-                key={link.to}
-                to={link.to}
-                className={`text-sm font-medium tracking-wide uppercase transition-colors hover:text-brand-saffron ${location.pathname === link.to ? 'text-brand-saffron' : 'text-white/90'}`}
-              >
-                {link.label}
-              </Link>
-            ))}
-          </nav>
-
-          <div className="hidden lg:flex items-center gap-4">
-            <a
-              href="https://www.instagram.com/apoorvpatel_photography/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-white/80 hover:text-brand-saffron transition-colors"
-              aria-label="Instagram"
+        <div className="hidden md:flex gap-8 items-center">
+          {navLinks.map(link => (
+            <Link
+              key={link.to}
+              to={link.to}
+              className={`font-body text-[12px] font-bold tracking-[0.15em] uppercase transition-all duration-300 ${
+                isActive(link.to)
+                  ? 'text-primary border-b-2 border-tertiary pb-1'
+                  : 'text-on-surface-variant hover:text-on-surface hover:scale-105'
+              }`}
             >
-              <InstagramIcon size={20} />
-            </a>
+              {link.label}
+            </Link>
+          ))}
+        </div>
+
+        <div className="hidden md:flex items-center gap-6">
+          <div className="flex gap-4 text-primary">
             <a
               href="https://wa.me/?text=Hi%2C%20I%27m%20interested%20in%20your%20photography%20services."
               target="_blank"
               rel="noopener noreferrer"
-              className="text-white/80 hover:text-green-400 transition-colors"
-              aria-label="WhatsApp"
+              className="hover:text-tertiary transition-colors hover:scale-105 duration-400"
             >
-              <MessageCircle size={20} />
+              <span className="material-symbols-outlined">chat</span>
             </a>
-            <Link
-              to="/contact"
-              className="ml-2 px-5 py-2 bg-brand-saffron text-black text-sm font-semibold rounded-full hover:bg-brand-gold transition-colors"
+            <a
+              href="https://www.instagram.com/apoorvpatel_photography/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-tertiary transition-colors hover:scale-105 duration-400"
             >
-              Get a Quote
-            </Link>
+              <span className="material-symbols-outlined">photo_camera</span>
+            </a>
           </div>
-
-          <button
-            onClick={() => setIsOpen(!isOpen)}
-            className="lg:hidden text-white p-2"
-            aria-label="Toggle menu"
+          <Link
+            to="/contact"
+            className="bg-on-background text-background font-body text-[14px] font-semibold tracking-[0.05em] px-6 py-3 btn-cinematic hover:bg-tertiary-fixed hover:text-on-tertiary rounded-sm"
           >
-            {isOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
+            Get a Quote
+          </Link>
         </div>
+
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="md:hidden text-primary"
+          aria-label="Toggle menu"
+        >
+          <span className="material-symbols-outlined text-[28px]">
+            {isOpen ? 'close' : 'menu'}
+          </span>
+        </button>
       </div>
 
       {isOpen && (
-        <div className="lg:hidden bg-brand-dark/98 backdrop-blur-md border-t border-white/10">
-          <div className="px-4 py-6 space-y-4">
+        <div className="md:hidden bg-background/98 backdrop-blur-xl border-t border-outline-variant/10">
+          <div className="px-5 py-8 space-y-1">
             {navLinks.map(link => (
               <Link
                 key={link.to}
                 to={link.to}
-                className={`block text-lg font-medium py-2 transition-colors ${location.pathname === link.to ? 'text-brand-saffron' : 'text-white/80 hover:text-white'}`}
+                className={`block py-3 font-body text-[14px] font-semibold tracking-[0.1em] uppercase transition-colors ${
+                  isActive(link.to) ? 'text-tertiary' : 'text-on-surface-variant hover:text-on-surface'
+                }`}
               >
                 {link.label}
               </Link>
             ))}
-            <div className="pt-4 border-t border-white/10 flex items-center gap-4">
+            <div className="pt-6 border-t border-outline-variant/10 mt-4 flex items-center gap-6">
+              <a
+                href="https://wa.me/?text=Hi"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-on-surface-variant hover:text-tertiary text-sm"
+              >
+                <span className="material-symbols-outlined text-[20px]">chat</span> WhatsApp
+              </a>
               <a
                 href="https://www.instagram.com/apoorvpatel_photography/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 text-white/80 hover:text-brand-saffron"
+                className="flex items-center gap-2 text-on-surface-variant hover:text-tertiary text-sm"
               >
-                <InstagramIcon size={20} /> Instagram
-              </a>
-              <a
-                href="https://wa.me/?text=Hi%2C%20I%27m%20interested%20in%20your%20photography%20services."
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 text-white/80 hover:text-green-400"
-              >
-                <MessageCircle size={20} /> WhatsApp
+                <span className="material-symbols-outlined text-[20px]">photo_camera</span> Instagram
               </a>
             </div>
             <Link
               to="/contact"
-              className="block text-center px-5 py-3 bg-brand-saffron text-black font-semibold rounded-full hover:bg-brand-gold transition-colors"
+              className="block mt-6 text-center bg-on-background text-background font-body text-[14px] font-semibold tracking-[0.05em] px-6 py-4 rounded-sm"
             >
               Get a Quote
             </Link>
           </div>
         </div>
       )}
-    </header>
+    </nav>
   );
 }
