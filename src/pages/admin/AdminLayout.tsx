@@ -30,11 +30,11 @@ export default function AdminLayout({ children, onLogout }: Props) {
   };
 
   return (
-    <div className="min-h-screen bg-brand-dark flex">
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-brand-charcoal border-r border-white/5 transform transition-transform lg:translate-x-0 lg:static lg:block ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="flex items-center justify-between p-4 border-b border-white/5">
-          <img src="/images/logo.png" alt="Logo" className="h-10" />
-          <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-white/60 hover:text-white">
+    <div className="min-h-screen bg-background flex">
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-surface-container-low border-r border-outline-variant/20 transform transition-transform lg:translate-x-0 lg:static lg:block ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="flex items-center justify-between p-4 border-b border-outline-variant/20">
+          <h2 className="font-display text-lg text-on-surface">Admin</h2>
+          <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-on-surface-variant hover:text-on-surface">
             <X size={20} />
           </button>
         </div>
@@ -45,10 +45,10 @@ export default function AdminLayout({ children, onLogout }: Props) {
               key={item.to}
               to={item.to}
               onClick={() => setSidebarOpen(false)}
-              className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+              className={`flex items-center gap-3 px-4 py-2.5 rounded-sm text-sm font-semibold transition-all ${
                 isActive(item.to)
-                  ? 'bg-brand-saffron/10 text-brand-saffron'
-                  : 'text-white/60 hover:bg-white/5 hover:text-white'
+                  ? 'bg-tertiary/20 text-tertiary'
+                  : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
               }`}
             >
               <item.icon size={18} />
@@ -58,10 +58,10 @@ export default function AdminLayout({ children, onLogout }: Props) {
           ))}
         </nav>
 
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-white/5">
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-outline-variant/20">
           <button
             onClick={onLogout}
-            className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium text-white/60 hover:bg-red-500/10 hover:text-red-400 transition-all w-full"
+            className="flex items-center gap-3 px-4 py-2.5 rounded-sm text-sm font-semibold text-on-surface-variant hover:bg-error/20 hover:text-error transition-all w-full"
           >
             <LogOut size={18} /> Sign Out
           </button>
@@ -71,12 +71,12 @@ export default function AdminLayout({ children, onLogout }: Props) {
       {sidebarOpen && <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setSidebarOpen(false)} />}
 
       <div className="flex-1 min-w-0">
-        <header className="sticky top-0 z-30 bg-brand-dark/95 backdrop-blur-sm border-b border-white/5 px-4 sm:px-6 py-4 flex items-center gap-4">
-          <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-white/60 hover:text-white">
+        <header className="sticky top-0 z-30 bg-surface-container-low/95 backdrop-blur-sm border-b border-outline-variant/20 px-4 sm:px-6 py-4 flex items-center gap-4">
+          <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-on-surface-variant hover:text-on-surface">
             <Menu size={24} />
           </button>
-          <h1 className="font-heading text-lg font-semibold">Admin Panel</h1>
-          <Link to="/" className="ml-auto text-sm text-brand-saffron hover:underline">View Website</Link>
+          <h1 className="font-display text-xl font-semibold text-on-surface">Admin Dashboard</h1>
+          <Link to="/" className="ml-auto text-sm text-tertiary hover:text-tertiary/80 font-semibold">← View Website</Link>
         </header>
         <main className="p-4 sm:p-6 lg:p-8">{children}</main>
       </div>
