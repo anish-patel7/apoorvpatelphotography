@@ -1,23 +1,32 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, MapPin, Calendar, Share2, X, ChevronLeft, ChevronRight, MessageCircle } from 'lucide-react';
-import { portfolioProjects } from '../data/portfolio';
+import { usePortfolioProject, usePortfolio } from '../hooks/usePortfolio';
 
 export default function PortfolioDetail() {
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const project = portfolioProjects.find(p => p.id === id);
+  const { project, loading } = usePortfolioProject(id || '');
+  const { projects } = usePortfolio();
 
-  if (!project) {
+  if (loading) {
     return (
       <div className="pt-32 pb-20 text-center">
-        <h1 className="font-heading text-3xl font-bold mb-4">Project Not Found</h1>
-        <Link to="/portfolio" className="text-brand-saffron hover:underline">Back to Portfolio</Link>
+        <p className="text-on-surface-variant">Loading project...</p>
       </div>
     );
   }
 
-  const related = portfolioProjects.filter(p => p.category === project.category && p.id !== project.id).slice(0, 3);
+  if (!project) {
+    return (
+      <div className="pt-32 pb-20 text-center">
+        <h1 className="font-display text-[40px] text-on-background mb-4 leading-tight">Project Not Found</h1>
+        <Link to="/portfolio" className="text-tertiary hover:text-tertiary/80">Back to Portfolio</Link>
+      </div>
+    );
+  }
+
+  const related = projects.filter(p => p.category === project.category && p.id !== project.id).slice(0, 3);
 
   const handleShare = async () => {
     if (navigator.share) {
@@ -35,17 +44,17 @@ export default function PortfolioDetail() {
             <ArrowLeft size={18} /> Back to Portfolio
           </Link>
 
-          <div className="aspect-[21/9] rounded-2xl overflow-hidden mb-8">
-            <img src={project.coverImage} alt={project.title} className="w-full h-full object-cover" />
+          <div className="aspect-[21/9] rounded-sm overflow-hidden mb-8">
+            <img src={project.cover_image} alt={project.title} className="w-full h-full object-cover" />
           </div>
 
           <div className="flex flex-col lg:flex-row gap-8 lg:gap-16">
             <div className="flex-1">
-              <span className="inline-block px-3 py-1 bg-brand-saffron/20 text-brand-saffron text-xs font-semibold rounded-full mb-4">
+              <span className="inline-block px-3 py-1 bg-tertiary/20 text-tertiary text-xs font-semibold rounded-sm mb-4">
                 {project.category}
               </span>
-              <h1 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-bold mb-4">{project.title}</h1>
-              <p className="text-white/60 leading-relaxed mb-6">{project.description}</p>
+              <h1 className="font-display text-[40px] sm:text-[48px] lg:text-[56px] text-on-background font-semibold mb-4 leading-tight">{project.title}</h1>
+              <p className="font-body text-[16px] text-on-surface-variant leading-relaxed mb-6">{project.description}</p>
 
               <div className="flex flex-wrap gap-6 text-sm text-white/50">
                 <span className="flex items-center gap-1.5"><MapPin size={16} className="text-brand-saffron" /> {project.location}</span>
@@ -90,7 +99,7 @@ export default function PortfolioDetail() {
               {related.map(p => (
                 <Link to={`/portfolio/${p.id}`} key={p.id} className="group rounded-2xl overflow-hidden">
                   <div className="aspect-[4/3] overflow-hidden">
-                    <img src={p.coverImage} alt={p.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" loading="lazy" />
+                    <img src={p.cover_image} alt={p.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" loading="lazy" />
                   </div>
                   <div className="p-4 bg-brand-dark">
                     <h3 className="font-heading font-semibold group-hover:text-brand-saffron transition-colors">{p.title}</h3>

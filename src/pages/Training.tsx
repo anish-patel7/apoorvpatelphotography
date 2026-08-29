@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { trainingCourses } from '../data/training';
+import { useTraining } from '../hooks/useTraining';
 
 const highlights = [
   { icon: 'lightbulb', title: 'Practical Sessions', desc: 'Hands-on experience in studio and natural light environments. Build your portfolio while you learn under expert guidance.' },
@@ -8,6 +8,8 @@ const highlights = [
 ];
 
 export default function Training() {
+  const { courses, loading } = useTraining();
+
   return (
     <main className="pt-[104px]">
       {/* Hero */}
@@ -68,38 +70,48 @@ export default function Training() {
           <h2 className="font-display text-[32px] md:text-[48px] text-on-background mb-4 leading-tight">Available Programs</h2>
           <p className="font-body text-[18px] text-on-surface-variant max-w-xl leading-relaxed">Select a discipline to begin your creative journey.</p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {trainingCourses.map(course => (
-            <div key={course.id} className="bg-surface-container-lowest border border-outline-variant/10 rounded-sm overflow-hidden group">
-              <div className="aspect-[16/9] relative overflow-hidden bg-surface-container">
-                <img
-                  src={course.image}
-                  alt={course.title}
-                  className="object-cover w-full h-full transform group-hover:scale-105 transition-transform duration-[1.5s] ease-out opacity-70 group-hover:opacity-100"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent opacity-80" />
-                <div className="absolute bottom-6 left-6 right-6 flex justify-between items-end">
-                  <span className="bg-surface-container-high/80 backdrop-blur-md px-3 py-1 font-body text-[10px] font-bold tracking-[0.15em] uppercase text-on-surface rounded-sm border border-outline-variant/20">
-                    {course.level}
-                  </span>
-                  <span className="font-body text-[10px] font-bold tracking-[0.15em] uppercase text-on-surface">{course.duration}</span>
+        {loading ? (
+          <div className="text-center py-20">
+            <p className="text-on-surface-variant">Loading courses...</p>
+          </div>
+        ) : courses.length === 0 ? (
+          <div className="text-center py-20">
+            <p className="text-on-surface-variant text-lg">Training courses will be announced soon.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {courses.map(course => (
+              <div key={course.id} className="bg-surface-container-lowest border border-outline-variant/10 rounded-sm overflow-hidden group">
+                <div className="aspect-[16/9] relative overflow-hidden bg-surface-container">
+                  <img
+                    src={course.image}
+                    alt={course.title}
+                    className="object-cover w-full h-full transform group-hover:scale-105 transition-transform duration-[1.5s] ease-out opacity-70 group-hover:opacity-100"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent opacity-80" />
+                  <div className="absolute bottom-6 left-6 right-6 flex justify-between items-end">
+                    <span className="bg-surface-container-high/80 backdrop-blur-md px-3 py-1 font-body text-[10px] font-bold tracking-[0.15em] uppercase text-on-surface rounded-sm border border-outline-variant/20">
+                      {course.level}
+                    </span>
+                    <span className="font-body text-[10px] font-bold tracking-[0.15em] uppercase text-on-surface">{course.duration}</span>
+                  </div>
+                </div>
+                <div className="p-8">
+                  <h3 className="font-display text-[32px] text-on-background mb-3 leading-tight">{course.title}</h3>
+                  <p className="font-body text-[16px] text-on-surface-variant mb-8 line-clamp-2 leading-relaxed">{course.description}</p>
+                  <div className="flex items-center gap-4">
+                    <Link to="/contact" className="bg-on-background text-background font-body text-[14px] font-semibold tracking-[0.05em] px-6 py-3 btn-cinematic hover:bg-tertiary hover:text-on-tertiary rounded-sm flex-1 text-center">
+                      Enquire
+                    </Link>
+                    <button className="border border-outline-variant/30 text-on-background font-body text-[14px] font-semibold tracking-[0.05em] px-6 py-3 btn-cinematic hover:bg-surface-variant rounded-sm flex-1 text-center">
+                      View Details
+                    </button>
+                  </div>
                 </div>
               </div>
-              <div className="p-8">
-                <h3 className="font-display text-[32px] text-on-background mb-3 leading-tight">{course.title}</h3>
-                <p className="font-body text-[16px] text-on-surface-variant mb-8 line-clamp-2 leading-relaxed">{course.description}</p>
-                <div className="flex items-center gap-4">
-                  <Link to="/contact" className="bg-on-background text-background font-body text-[14px] font-semibold tracking-[0.05em] px-6 py-3 btn-cinematic hover:bg-tertiary hover:text-on-tertiary rounded-sm flex-1 text-center">
-                    Enquire
-                  </Link>
-                  <button className="border border-outline-variant/30 text-on-background font-body text-[14px] font-semibold tracking-[0.05em] px-6 py-3 btn-cinematic hover:bg-surface-variant rounded-sm flex-1 text-center">
-                    View Details
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Testimonial */}
