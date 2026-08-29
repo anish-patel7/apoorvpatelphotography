@@ -107,15 +107,15 @@ export function usePortfolioAdmin() {
   useEffect(() => { fetch(); }, [fetch]);
 
   const create = async (project: Partial<Project>) => {
-    const { error } = await supabase.from('portfolio_projects').insert([project] as any);
+    const { error } = await (supabase.from('portfolio_projects').insert as any)([project]);
     if (error) throw error;
     await fetch();
   };
 
   const update = async (id: string, updates: Partial<Project>) => {
-    const { error } = await supabase
+    const { error } = await (supabase
       .from('portfolio_projects')
-      .update(updates as any)
+      .update as any)(updates)
       .eq('id', id);
     if (error) throw error;
     await fetch();

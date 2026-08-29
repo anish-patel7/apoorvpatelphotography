@@ -59,13 +59,13 @@ export function useServicesAdmin() {
   useEffect(() => { fetch(); }, [fetch]);
 
   const create = async (service: Partial<Service>) => {
-    const { error } = await supabase.from('services').insert([service] as any);
+    const { error } = await (supabase.from('services').insert as any)([service]);
     if (error) throw error;
     await fetch();
   };
 
   const update = async (id: string, updates: Partial<Service>) => {
-    const { error } = await supabase.from('services').update(updates as any).eq('id', id);
+    const { error } = await (supabase.from('services').update as any)(updates).eq('id', id);
     if (error) throw error;
     await fetch();
   };

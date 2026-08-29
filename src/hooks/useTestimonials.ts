@@ -52,13 +52,13 @@ export function useTestimonialsAdmin() {
   useEffect(() => { fetch(); }, [fetch]);
 
   const create = async (testimonial: Partial<Testimonial>) => {
-    const { error } = await supabase.from('testimonials').insert([testimonial] as any);
+    const { error } = await (supabase.from('testimonials').insert as any)([testimonial]);
     if (error) throw error;
     await fetch();
   };
 
   const update = async (id: string, updates: Partial<Testimonial>) => {
-    const { error } = await supabase.from('testimonials').update(updates as any).eq('id', id);
+    const { error } = await (supabase.from('testimonials').update as any)(updates).eq('id', id);
     if (error) throw error;
     await fetch();
   };

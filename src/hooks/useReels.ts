@@ -51,13 +51,13 @@ export function useReelsAdmin() {
   useEffect(() => { fetch(); }, [fetch]);
 
   const create = async (reel: Partial<Reel>) => {
-    const { error } = await supabase.from('instagram_reels').insert([reel] as any);
+    const { error } = await (supabase.from('instagram_reels').insert as any)([reel]);
     if (error) throw error;
     await fetch();
   };
 
   const update = async (id: string, updates: Partial<Reel>) => {
-    const { error } = await supabase.from('instagram_reels').update(updates as any).eq('id', id);
+    const { error } = await (supabase.from('instagram_reels').update as any)(updates).eq('id', id);
     if (error) throw error;
     await fetch();
   };

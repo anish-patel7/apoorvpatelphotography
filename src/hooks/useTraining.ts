@@ -57,13 +57,13 @@ export function useTrainingAdmin() {
   useEffect(() => { fetch(); }, [fetch]);
 
   const create = async (course: Partial<Course>) => {
-    const { error } = await supabase.from('training_courses').insert([course] as any);
+    const { error } = await (supabase.from('training_courses').insert as any)([course]);
     if (error) throw error;
     await fetch();
   };
 
   const update = async (id: string, updates: Partial<Course>) => {
-    const { error } = await supabase.from('training_courses').update(updates as any).eq('id', id);
+    const { error } = await (supabase.from('training_courses').update as any)(updates).eq('id', id);
     if (error) throw error;
     await fetch();
   };

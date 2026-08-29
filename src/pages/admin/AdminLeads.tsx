@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, X, MessageCircle, Mail, Phone } from 'lucide-react';
+import { Search, Eye, X, MessageCircle, Mail, Phone } from 'lucide-react';
 
 interface Lead {
   id: string;

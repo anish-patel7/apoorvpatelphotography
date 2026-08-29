@@ -33,7 +33,7 @@ export function useSubmitInquiry() {
   const submit = async (data: Partial<Lead>) => {
     setSubmitting(true);
     try {
-      const { error } = await supabase.from('leads').insert([data] as any);
+      const { error } = await (supabase.from('leads').insert as any)([data]);
       if (error) throw error;
       return true;
     } catch (err) {
@@ -75,7 +75,7 @@ export function useLeadsAdmin(statusFilter?: LeadStatus, search?: string) {
   useEffect(() => { fetch(); }, [fetch]);
 
   const updateStatus = async (id: string, status: LeadStatus) => {
-    const { error } = await supabase.from('leads').update({ status } as any).eq('id', id);
+    const { error } = await (supabase.from('leads').update as any)({ status }).eq('id', id);
     if (error) throw error;
     await fetch();
   };
