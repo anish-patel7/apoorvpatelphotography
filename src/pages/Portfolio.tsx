@@ -1,13 +1,24 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { portfolioProjects, portfolioCategories } from '../data/portfolio';
+import { usePortfolio } from '../hooks/usePortfolio';
+
+const portfolioCategories = [
+  'All',
+  'Wedding',
+  'Engagement',
+  'Pre-Wedding',
+  'Baby Shower',
+  'Maternity',
+  'Family',
+  'Personal',
+  'Videography',
+  'Photo Editing',
+  'Video Editing',
+] as const;
 
 export default function Portfolio() {
-  const [activeCategory, setActiveCategory] = useState('All');
-
-  const filtered = activeCategory === 'All'
-    ? portfolioProjects
-    : portfolioProjects.filter(p => p.category === activeCategory);
+  const [activeCategory, setActiveCategory] = useState<string>('All');
+  const { projects, loading } = usePortfolio(activeCategory === 'All' ? undefined : activeCategory);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -59,28 +70,39 @@ export default function Portfolio() {
       </section>
 
       <section className="px-5 md:px-16 pb-[120px] max-w-[1440px] mx-auto">
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-8 auto-rows-[300px] md:auto-rows-[400px]">
-          {filtered.map((project, i) => (
-            <Link
-              key={project.id}
-              to={`/portfolio/${project.id}`}
-              className={`${gridSpans[i % gridSpans.length]} relative group cursor-pointer overflow-hidden rounded-lg bg-surface-container border border-white/10`}
-            >
-              <div
-                className="absolute inset-0 bg-cover bg-center transition-transform duration-700 ease-out group-hover:scale-105"
-                style={{ backgroundImage: `url('${project.coverImage}')` }}
-              />
-              <div className="absolute inset-0 gallery-overlay opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex flex-col justify-end p-8">
-                <span className="font-body text-[12px] font-bold tracking-[0.15em] uppercase text-tertiary mb-2">
-                  {project.category}
-                </span>
-                <h3 className="font-display text-[32px] text-on-background leading-tight">
-                  {project.title}
-                </h3>
-              </div>
-            </Link>
-          ))}
-        </div>
+        {loading ? (
+          <div className="text-center py-20">
+            <p className="text-on-surface-variant">Loading portfolio...</p>
+          </div>
+        ) : projects.length === 0 ? (
+          <div className="text-center py-20">
+            <p className="text-on-surface-variant text-lg">No portfolio projects available yet.</p>
+            <p className="text-on-surface-variant text-sm mt-2">Check back soon for our latest work!</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-8 auto-rows-[300px] md:auto-rows-[400px]">
+            {projects.map((project, i) => (
+              <Link
+                key={project.id}
+                to={`/portfolio/${project.id}`}
+                className={`${gridSpans[i % gridSpans.length]} relative group cursor-pointer overflow-hidden rounded-lg bg-surface-container border border-outline-variant/20`}
+              >
+                <div
+                  className="absolute inset-0 bg-cover bg-center transition-transform duration-700 ease-out group-hover:scale-105"
+                  style={{ backgroundImage: `url('${project.cover_image}')` }}
+                />
+                <div className="absolute inset-0 gallery-overlay opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex flex-col justify-end p-8">
+                  <span className="font-body text-[12px] font-bold tracking-[0.15em] uppercase text-tertiary mb-2">
+                    {project.category}
+                  </span>
+                  <h3 className="font-display text-[32px] text-on-background leading-tight">
+                    {project.title}
+                  </h3>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="py-[120px] bg-surface-container-low text-center px-5">
