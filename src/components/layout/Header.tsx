@@ -13,6 +13,7 @@ const navLinks = [
 export default function Header() {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [isDark, setIsDark] = useState(true);
   const location = useLocation();
 
   useEffect(() => {
@@ -22,6 +23,19 @@ export default function Header() {
   }, []);
 
   useEffect(() => { setIsOpen(false); }, [location]);
+
+  const toggleTheme = () => {
+    const html = document.documentElement;
+    const newIsDark = !isDark;
+    setIsDark(newIsDark);
+    if (newIsDark) {
+      html.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      html.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  };
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -51,7 +65,17 @@ export default function Header() {
         </div>
 
         <div className="hidden md:flex items-center gap-6">
-          <div className="flex gap-4 text-primary">
+          <button
+            onClick={toggleTheme}
+            className="text-on-surface-variant hover:text-on-surface transition-colors"
+            aria-label="Toggle theme"
+            title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            <span className="material-symbols-outlined text-[20px]">
+              {isDark ? 'light_mode' : 'dark_mode'}
+            </span>
+          </button>
+          <div className="flex gap-4 text-on-surface-variant">
             <a
               href="https://wa.me/?text=Hi%2C%20I%27m%20interested%20in%20your%20photography%20services."
               target="_blank"
