@@ -86,7 +86,7 @@ export default function Services() {
               </div>
             ))}
           </div>
-        </div>
+        )}
       </section>
 
       <section className="py-[120px] bg-surface-container-low">
