@@ -1,0 +1,135 @@
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '../lib/supabase';
+import type { Database, LeadStatus } from '../lib/database.types';
+
+type Lead = Database['public']['Tables']['leads']['Row'];
+type LeadInsert = Database['public']['Tables']['leads']['Insert'];
+type LeadNote = Database['public']['Tables']['lead_notes']['Row'];
+
+export function useSubmitInquiry() {
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async (data: LeadInsert) => {
+    setSubmitting(true);
+    try {
+      const { error } = await supabase.from('leads').insert(data);
+      if (error) throw error;
+      return true;
+    } catch (err) {
+      console.error('Inquiry submission error:', err);
+      return false;
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return { submit, submitting };
+}
+
+export function useLeadsAdmin(statusFilter?: LeadStatus, search?: string) {
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetch = useCallback(async () => {
+    setLoading(true);
+    let query = supabase
+      .from('leads')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (statusFilter) {
+      query = query.eq('status', statusFilter);
+    }
+
+    if (search) {
+      query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%,mobile.ilike.%${search}%`);
+    }
+
+    const { data, error } = await query;
+    if (error) console.error('Leads fetch error:', error);
+    setLeads(data ?? []);
+    setLoading(false);
+  }, [statusFilter, search]);
+
+  useEffect(() => { fetch(); }, [fetch]);
+
+  const updateStatus = async (id: string, status: LeadStatus) => {
+    const { error } = await supabase.from('leads').update({ status }).eq('id', id);
+    if (error) throw error;
+    await fetch();
+  };
+
+  const remove = async (id: string) => {
+    const { error } = await supabase.from('leads').delete().eq('id', id);
+    if (error) throw error;
+    await fetch();
+  };
+
+  return { leads, loading, updateStatus, remove, refetch: fetch };
+}
+
+export function useLeadNotes(leadId: string) {
+  const [notes, setNotes] = useState<LeadNote[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetch = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('lead_notes')
+      .select('*')
+      .eq('lead_id', leadId)
+      .order('created_at', { ascending: false });
+
+    if (error) console.error('Lead notes fetch error:', error);
+    setNotes(data ?? []);
+    setLoading(false);
+  }, [leadId]);
+
+  useEffect(() => { fetch(); }, [fetch]);
+
+  const addNote = async (content: string) => {
+    const { error } = await supabase
+      .from('lead_notes')
+      .insert({ lead_id: leadId, content });
+    if (error) throw error;
+    await fetch();
+  };
+
+  return { notes, loading, addNote };
+}
+
+export function useLeadStats() {
+  const [stats, setStats] = useState({
+    total: 0,
+    new: 0,
+    contacted: 0,
+    confirmed: 0,
+    completed: 0,
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('status');
+
+      if (error) {
+        console.error('Lead stats error:', error);
+        setLoading(false);
+        return;
+      }
+
+      const rows = data ?? [];
+      setStats({
+        total: rows.length,
+        new: rows.filter(r => r.status === 'new').length,
+        contacted: rows.filter(r => r.status === 'contacted').length,
+        confirmed: rows.filter(r => r.status === 'confirmed').length,
+        completed: rows.filter(r => r.status === 'completed').length,
+      });
+      setLoading(false);
+    })();
+  }, []);
+
+  return { stats, loading };
+}
