@@ -32,7 +32,7 @@ export default function Services() {
               onClick={() => setActiveTab(cat.id)}
               className={`flex items-center gap-2 px-6 py-3 rounded-sm font-body text-[14px] font-semibold tracking-[0.05em] transition-all ${
                 activeTab === cat.id
-                  ? 'bg-on-background text-background'
+                  ? 'bg-tertiary text-background border-b-2 border-tertiary'
                   : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
               }`}
             >
