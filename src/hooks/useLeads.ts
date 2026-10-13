@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import type { LeadStatus } from '../lib/database.types';
 
-interface Lead {
+export interface Lead {
   id: string;
   name: string;
   mobile: string;
@@ -16,29 +16,102 @@ interface Lead {
   message: string;
   status: LeadStatus;
   source: string;
+  notes: string[];
   created_at: string;
   updated_at: string;
 }
 
-interface LeadNote {
-  id: string;
-  lead_id: string;
-  content: string;
-  created_at: string;
+function mapInquiryRow(row: any): Lead {
+  return {
+    id: row.id,
+    name: row.customer_name || row.name || 'Anonymous',
+    mobile: row.phone || row.mobile || '',
+    whatsapp: row.phone || row.whatsapp || '',
+    email: row.email || '',
+    service_type: row.event_type || row.service_type || 'Photography',
+    event_type: row.event_type || null,
+    event_date: row.event_date || null,
+    location: row.event_location || row.location || null,
+    budget: row.budget || null,
+    message: row.message || '',
+    status: (row.inquiry_status || row.status || 'new') as LeadStatus,
+    source: row.source || 'website',
+    notes: Array.isArray(row.notes) ? row.notes : [],
+    created_at: row.created_at || new Date().toISOString(),
+    updated_at: row.updated_at || new Date().toISOString(),
+  };
 }
 
 export function useSubmitInquiry() {
   const [submitting, setSubmitting] = useState(false);
 
-  const submit = async (data: Partial<Lead>) => {
+  const submit = async (data: {
+    name: string;
+    email: string;
+    phone?: string;
+    eventType?: string;
+    eventDate?: string;
+    location?: string;
+    budget?: string;
+    message: string;
+  }): Promise<{ success: boolean; id?: string; error?: string }> => {
     setSubmitting(true);
     try {
-      const { error } = await (supabase.from('leads').insert as any)([data]);
-      if (error) throw error;
-      return true;
-    } catch (err) {
+      if (!isSupabaseConfigured) {
+        // Safe offline mode simulation
+        return { success: true, id: `offline-${Date.now()}` };
+      }
+
+      const payload = {
+        customer_name: data.name.trim(),
+        email: data.email.trim().toLowerCase(),
+        phone: (data.phone || '').trim(),
+        event_type: data.eventType || 'Wedding',
+        event_date: data.eventDate || null,
+        event_location: (data.location || '').trim() || null,
+        budget: data.budget || null,
+        message: data.message.trim(),
+        inquiry_status: 'new',
+        source: 'website',
+      };
+
+      const { data: inserted, error } = await (supabase
+        .from('inquiries')
+        .insert([payload as any])
+        .select('id')
+        .single());
+
+      if (error) {
+        // Try fallback to leads if table alias exists
+        const { data: fallbackInserted, error: fallbackError } = await (supabase
+          .from('leads')
+          .insert([{
+            name: payload.customer_name,
+            email: payload.email,
+            mobile: payload.phone,
+            whatsapp: payload.phone,
+            service_type: payload.event_type,
+            event_type: payload.event_type,
+            event_date: payload.event_date,
+            location: payload.event_location,
+            budget: payload.budget,
+            message: payload.message,
+            status: 'new',
+            source: 'website',
+          } as any])
+          .select('id')
+          .single());
+
+        if (fallbackError) {
+          throw new Error(error.message || fallbackError.message);
+        }
+        return { success: true, id: fallbackInserted?.id };
+      }
+
+      return { success: true, id: inserted?.id };
+    } catch (err: any) {
       console.error('Inquiry submission error:', err);
-      return false;
+      return { success: false, error: err?.message || 'Failed to submit inquiry' };
     } finally {
       setSubmitting(false);
     }
@@ -53,104 +126,98 @@ export function useLeadsAdmin(statusFilter?: LeadStatus, search?: string) {
 
   const fetch = useCallback(async () => {
     setLoading(true);
-    let query = supabase
-      .from('leads')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (statusFilter) {
-      query = query.eq('status', statusFilter);
+    if (!isSupabaseConfigured) {
+      setLeads([]);
+      setLoading(false);
+      return;
     }
 
-    if (search) {
-      query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%,mobile.ilike.%${search}%`);
-    }
+    try {
+      let query = supabase
+        .from('inquiries')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-    const { data, error } = await query;
-    if (error) console.error('Leads fetch error:', error);
-    setLeads((data as Lead[]) ?? []);
-    setLoading(false);
+      if (statusFilter) {
+        query = query.eq('inquiry_status', statusFilter);
+      }
+
+      if (search && search.trim()) {
+        const q = search.trim();
+        query = query.or(`customer_name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        // Fallback to leads table if inquiries isn't present
+        const { data: leadsData, error: leadsErr } = await supabase
+          .from('leads')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (leadsErr) {
+          console.error('Inquiries & Leads fetch error:', leadsErr.message);
+          setLeads([]);
+        } else {
+          setLeads((leadsData || []).map(mapInquiryRow));
+        }
+      } else {
+        setLeads((data || []).map(mapInquiryRow));
+      }
+    } catch (err) {
+      console.error('Error fetching admin inquiries:', err);
+      setLeads([]);
+    } finally {
+      setLoading(false);
+    }
   }, [statusFilter, search]);
 
   useEffect(() => { fetch(); }, [fetch]);
 
   const updateStatus = async (id: string, status: LeadStatus) => {
-    const { error } = await (supabase.from('leads').update as any)({ status }).eq('id', id);
-    if (error) throw error;
+    if (!isSupabaseConfigured) {
+      setLeads(prev => prev.map(l => l.id === id ? { ...l, status } : l));
+      return;
+    }
+
+    const { error } = await (supabase.from('inquiries').update as any)({ inquiry_status: status }).eq('id', id);
+    if (error) {
+      // Fallback update to leads table
+      await (supabase.from('leads').update as any)({ status }).eq('id', id);
+    }
+    await fetch();
+  };
+
+  const addNote = async (id: string, noteText: string) => {
+    if (!noteText.trim()) return;
+    const target = leads.find(l => l.id === id);
+    const existingNotes = target?.notes || [];
+    const updatedNotes = [...existingNotes, noteText.trim()];
+
+    if (!isSupabaseConfigured) {
+      setLeads(prev => prev.map(l => l.id === id ? { ...l, notes: updatedNotes } : l));
+      return;
+    }
+
+    const { error } = await (supabase.from('inquiries').update as any)({ notes: updatedNotes }).eq('id', id);
+    if (error) {
+      await (supabase.from('leads').update as any)({ notes: updatedNotes }).eq('id', id);
+    }
     await fetch();
   };
 
   const remove = async (id: string) => {
-    const { error } = await supabase.from('leads').delete().eq('id', id);
-    if (error) throw error;
+    if (!isSupabaseConfigured) {
+      setLeads(prev => prev.filter(l => l.id !== id));
+      return;
+    }
+
+    const { error } = await supabase.from('inquiries').delete().eq('id', id);
+    if (error) {
+      await supabase.from('leads').delete().eq('id', id);
+    }
     await fetch();
   };
 
-  return { leads, loading, updateStatus, remove, refetch: fetch };
-}
-
-export function useLeadNotes(leadId: string) {
-  const [notes, setNotes] = useState<LeadNote[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetch = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('lead_notes')
-      .select('*')
-      .eq('lead_id', leadId)
-      .order('created_at', { ascending: false });
-
-    if (error) console.error('Lead notes fetch error:', error);
-    setNotes((data as LeadNote[]) ?? []);
-    setLoading(false);
-  }, [leadId]);
-
-  useEffect(() => { fetch(); }, [fetch]);
-
-  const addNote = async (content: string) => {
-    const { error } = await supabase
-      .from('lead_notes')
-      .insert([{ lead_id: leadId, content }] as any);
-    if (error) throw error;
-    await fetch();
-  };
-
-  return { notes, loading, addNote };
-}
-
-export function useLeadStats() {
-  const [stats, setStats] = useState({
-    total: 0,
-    new: 0,
-    contacted: 0,
-    confirmed: 0,
-    completed: 0,
-  });
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    (async () => {
-      const { data, error } = await supabase
-        .from('leads')
-        .select('status');
-
-      if (error) {
-        console.error('Lead stats error:', error);
-        setLoading(false);
-        return;
-      }
-
-      const rows = (data as any[]) ?? [];
-      setStats({
-        total: rows.length,
-        new: rows.filter(r => r.status === 'new').length,
-        contacted: rows.filter(r => r.status === 'contacted').length,
-        confirmed: rows.filter(r => r.status === 'confirmed').length,
-        completed: rows.filter(r => r.status === 'completed').length,
-      });
-      setLoading(false);
-    })();
-  }, []);
-
-  return { stats, loading };
+  return { leads, loading, updateStatus, addNote, remove, refetch: fetch };
 }

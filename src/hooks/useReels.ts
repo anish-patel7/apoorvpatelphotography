@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { instagramReels } from '../data/reels';
 
 interface Reel {
   id: string;
@@ -11,22 +12,47 @@ interface Reel {
   created_at: string;
 }
 
+const fallbackReels: Reel[] = instagramReels.map((r, idx) => ({
+  id: r.id,
+  thumbnail: r.thumbnail,
+  url: r.url,
+  title: r.title,
+  featured: r.featured,
+  sort_order: idx + 1,
+  created_at: new Date().toISOString(),
+}));
+
 export function useReels() {
   const [reels, setReels] = useState<Reel[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!isSupabaseConfigured) {
+      setReels(fallbackReels);
+      setLoading(false);
+      return;
+    }
+
     supabase
       .from('instagram_reels')
       .select('*')
       .eq('featured', true)
       .order('sort_order')
       .limit(6)
-      .then(({ data, error }) => {
-        if (error) console.error('Reels fetch error:', error);
-        setReels((data as Reel[]) ?? []);
-        setLoading(false);
-      });
+      .then(
+        ({ data, error }) => {
+          if (error || !data || data.length === 0) {
+            setReels(fallbackReels);
+          } else {
+            setReels(data as Reel[]);
+          }
+          setLoading(false);
+        },
+        () => {
+          setReels(fallbackReels);
+          setLoading(false);
+        }
+      );
   }, []);
 
   return { reels, loading };

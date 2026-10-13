@@ -1,8 +1,25 @@
 import { Link } from 'react-router-dom';
+import SEO from '../components/common/SEO';
+
+const aboutBreadcrumbs = {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.apoorvpatelphotography.com/' },
+    { '@type': 'ListItem', position: 2, name: 'About', item: 'https://www.apoorvpatelphotography.com/about' },
+  ],
+};
 
 export default function About() {
   return (
     <main className="pt-[104px]">
+      <SEO
+        title="About Apoorv Patel | Inspired by Innovation — Photography Studio IND & UK"
+        description="Meet Apoorv Patel, founder of Apoorv Patel Photography. Dedicated to capturing heartfelt weddings, human connection, and timeless imagery across India and the United Kingdom."
+        canonicalPath="/about"
+        image="/images/logo.png"
+        schema={aboutBreadcrumbs}
+      />
       {/* Hero */}
       <section className="px-5 md:px-16 py-[120px] max-w-[1440px] mx-auto">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
@@ -49,7 +66,18 @@ export default function About() {
               />
             </div>
             <div className="absolute -bottom-6 -left-6 bg-surface-container border border-outline-variant/10 rounded-sm p-6 shadow-2xl hidden lg:block">
-              <img src="/images/logo.png" alt="AP Logo" className="h-20 w-auto" />
+              <picture>
+                <source srcSet="/images/logo.webp" type="image/webp" />
+                <img
+                  src="/images/logo.png"
+                  alt="Apoorvpatel Photography Logo"
+                  className="h-20 w-auto"
+                  width="120"
+                  height="80"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </picture>
             </div>
             <div className="absolute -bottom-10 -right-10 w-48 h-48 bg-tertiary/10 blur-[60px] rounded-full pointer-events-none" />
           </div>

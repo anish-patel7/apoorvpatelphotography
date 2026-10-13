@@ -1,12 +1,58 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import {
+  Heart,
+  Sparkles,
+  Camera,
+  Baby,
+  PartyPopper,
+  Users,
+  HeartHandshake,
+  User,
+  Film,
+  Video,
+  Share2,
+  Palette,
+  Clapperboard,
+  Wand2,
+  CheckCircle,
+  type LucideIcon,
+} from 'lucide-react';
+import SEO from '../components/common/SEO';
 import { useServices } from '../hooks/useServices';
 
+const iconMap: Record<string, LucideIcon> = {
+  Heart,
+  Sparkles,
+  Camera,
+  Baby,
+  PartyPopper,
+  Users,
+  HeartHandshake,
+  User,
+  Film,
+  Video,
+  Instagram: Share2,
+  Palette,
+  Clapperboard,
+  Wand: Wand2,
+  Wand2,
+};
+
 const serviceCategories = [
-  { id: 'photography', label: 'Photography', icon: 'photo_camera' },
-  { id: 'videography', label: 'Videography', icon: 'videocam' },
-  { id: 'editing', label: 'Editing', icon: 'edit' },
+  { id: 'photography', label: 'Photography', icon: Camera },
+  { id: 'videography', label: 'Videography', icon: Video },
+  { id: 'editing', label: 'Editing', icon: Palette },
 ];
+
+const servicesBreadcrumbs = {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.apoorvpatelphotography.com/' },
+    { '@type': 'ListItem', position: 2, name: 'Services', item: 'https://www.apoorvpatelphotography.com/services' },
+  ],
+};
 
 export default function Services() {
   const [activeTab, setActiveTab] = useState<string>('photography');
@@ -14,6 +60,13 @@ export default function Services() {
 
   return (
     <main className="pt-[104px]">
+      <SEO
+        title="Photography & Videography Services | Weddings, Events & Films — Apoorv Patel"
+        description="Comprehensive photography, cinematic videography, and post-production retouching services tailored for weddings, couples, events, and commercial projects in IND & UK."
+        canonicalPath="/services"
+        image="/images/real_work_dzvz4ssjoss.jpg"
+        schema={servicesBreadcrumbs}
+      />
       <section className="px-5 md:px-16 py-[120px] max-w-[1440px] mx-auto">
         <div className="text-center mb-16">
           <p className="font-body text-[12px] font-bold tracking-[0.2em] uppercase text-tertiary mb-6">What We Offer</p>
@@ -26,20 +79,23 @@ export default function Services() {
         </div>
 
         <div className="flex justify-center gap-4 mb-16 flex-wrap">
-          {serviceCategories.map(cat => (
-            <button
-              key={cat.id}
-              onClick={() => setActiveTab(cat.id)}
-              className={`flex items-center gap-2 px-6 py-3 rounded-sm font-body text-[14px] font-semibold tracking-[0.05em] transition-all ${
-                activeTab === cat.id
-                  ? 'bg-tertiary text-background border-b-2 border-tertiary'
-                  : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
-              }`}
-            >
-              <span className="material-symbols-outlined text-[20px]">{cat.icon}</span>
-              {cat.label}
-            </button>
-          ))}
+          {serviceCategories.map(cat => {
+            const CatIcon = cat.icon;
+            return (
+              <button
+                key={cat.id}
+                onClick={() => setActiveTab(cat.id)}
+                className={`flex items-center gap-2 px-6 py-3 rounded-sm font-body text-[14px] font-semibold tracking-[0.05em] transition-all cursor-pointer ${
+                  activeTab === cat.id
+                    ? 'bg-tertiary text-background border-b-2 border-tertiary'
+                    : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+                }`}
+              >
+                <CatIcon className="w-5 h-5" />
+                {cat.label}
+              </button>
+            );
+          })}
         </div>
       </section>
 
@@ -54,37 +110,38 @@ export default function Services() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {services.map(service => (
-              <div
-                key={service.id}
-                className="group bg-surface-container-low rounded-sm p-8 border border-outline-variant/10 hover:bg-surface-container transition-colors duration-300"
-              >
-                <span className="material-symbols-outlined text-[40px] text-tertiary mb-4 block" style={{ fontVariationSettings: "'wght' 200" }}>
-                  {service.icon || 'photo_camera'}
-                </span>
-                <h3 className="font-display text-[24px] text-on-surface mb-3 leading-tight">
-                  {service.title}
-                </h3>
-                <p className="font-body text-[16px] text-on-surface-variant leading-relaxed mb-6">{service.description}</p>
-                {service.features && service.features.length > 0 && (
-                  <ul className="space-y-2 mb-6">
-                    {service.features.map(f => (
-                      <li key={f} className="flex items-center gap-2 font-body text-[14px] text-on-surface-variant">
-                        <span className="material-symbols-outlined text-[18px] text-tertiary">check_circle</span>
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <Link
-                  to="/contact"
+            {services.map(service => {
+              const IconComp = iconMap[service.icon] || Camera;
+              return (
+                <div
+                  key={service.id}
+                  className="group bg-surface-container-low rounded-sm p-8 border border-outline-variant/10 hover:bg-surface-container transition-colors duration-300"
+                >
+                  <IconComp className="w-10 h-10 text-tertiary mb-4" strokeWidth={1.5} />
+                  <h3 className="font-display text-[24px] text-on-surface mb-3 leading-tight">
+                    {service.title}
+                  </h3>
+                  <p className="font-body text-[16px] text-on-surface-variant leading-relaxed mb-6">{service.description}</p>
+                  {service.features && service.features.length > 0 && (
+                    <ul className="space-y-2 mb-6">
+                      {service.features.map((f: string) => (
+                        <li key={f} className="flex items-center gap-2 font-body text-[14px] text-on-surface-variant">
+                          <CheckCircle className="w-4 h-4 text-tertiary flex-shrink-0" />
+                          {f}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <Link
+                    to="/contact"
                   className="inline-flex items-center gap-2 text-tertiary font-body text-[14px] font-semibold hover:text-tertiary/80 transition-all"
                 >
                   Inquire Now
                   <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
                 </Link>
               </div>
-            ))}
+            );
+          })}
           </div>
         )}
       </section>

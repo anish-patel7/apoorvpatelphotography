@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import SEO from '../components/common/SEO';
 import { useTraining } from '../hooks/useTraining';
 
 const highlights = [
@@ -7,11 +8,27 @@ const highlights = [
   { icon: 'groups', title: 'Intimate Batches', desc: 'Limited batch sizes ensure personalized attention, detailed critique, and a collaborative learning environment.' },
 ];
 
+const trainingBreadcrumbs = {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.apoorvpatelphotography.com/' },
+    { '@type': 'ListItem', position: 2, name: 'Training', item: 'https://www.apoorvpatelphotography.com/training' },
+  ],
+};
+
 export default function Training() {
   const { courses, loading } = useTraining();
 
   return (
     <main className="pt-[104px]">
+      <SEO
+        title="Photography & Editing Training Courses | Master Visual Storytelling — Apoorv Patel"
+        description="Hands-on training courses in professional photography, cinematography, Adobe Lightroom, and video editing. Personalized coaching for aspiring visual storytellers."
+        canonicalPath="/training"
+        image="/images/real_work_dzvz4ssjoss.jpg"
+        schema={trainingBreadcrumbs}
+      />
       {/* Hero */}
       <section className="min-h-[716px] flex items-center px-5 md:px-16 py-[120px] max-w-[1440px] mx-auto">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
@@ -96,9 +113,9 @@ export default function Training() {
                     <span className="font-body text-[10px] font-bold tracking-[0.15em] uppercase text-on-surface">{course.duration}</span>
                   </div>
                 </div>
-                <div className="p-8">
-                  <h3 className="font-display text-[32px] text-on-background mb-3 leading-tight">{course.title}</h3>
-                  <p className="font-body text-[16px] text-on-surface-variant mb-8 line-clamp-2 leading-relaxed">{course.description}</p>
+                <div className="p-6 sm:p-8">
+                  <h3 className="font-display text-[22px] sm:text-[32px] text-on-background mb-3 leading-tight">{course.title}</h3>
+                  <p className="font-body text-[15px] sm:text-[16px] text-on-surface-variant mb-6 sm:mb-8 line-clamp-2 leading-relaxed">{course.description}</p>
                   <div className="flex items-center gap-4">
                     <Link to="/contact" className="bg-on-background text-background font-body text-[14px] font-semibold tracking-[0.05em] px-6 py-3 btn-cinematic hover:bg-tertiary hover:text-on-tertiary rounded-sm flex-1 text-center">
                       Enquire

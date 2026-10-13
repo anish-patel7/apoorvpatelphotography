@@ -1,17 +1,32 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../lib/supabase';
-
-interface Service {
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { services as defaultServices } from '../data/services';
+export interface Service {
   id: string;
   title: string;
+  slug?: string;
   category: 'photography' | 'videography' | 'editing';
   description: string;
   icon: string;
   features: string[];
+  price_label?: string;
+  is_active?: boolean;
   sort_order: number;
   created_at: string;
   updated_at: string;
 }
+
+const fallbackServices: Service[] = defaultServices.map((s, idx) => ({
+  id: s.id,
+  title: s.title,
+  category: s.category,
+  description: s.description,
+  icon: s.icon,
+  features: s.features,
+  sort_order: idx + 1,
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+}));
 
 export function useServices(category?: string) {
   const [services, setServices] = useState<Service[]>([]);
@@ -19,18 +34,43 @@ export function useServices(category?: string) {
 
   const fetch = useCallback(async () => {
     setLoading(true);
-    let query = supabase
-      .from('services')
-      .select('*')
-      .order('sort_order');
-
-    if (category) {
-      query = query.eq('category', category);
+    if (!isSupabaseConfigured) {
+      let filtered = fallbackServices;
+      if (category) {
+        filtered = filtered.filter(s => s.category.toLowerCase() === category.toLowerCase());
+      }
+      setServices(filtered);
+      setLoading(false);
+      return;
     }
 
-    const { data, error } = await query;
-    if (error) console.error('Services fetch error:', error);
-    setServices((data as Service[]) ?? []);
+    try {
+      let query = supabase
+        .from('services')
+        .select('*')
+        .order('sort_order');
+
+      if (category) {
+        query = query.eq('category', category);
+      }
+
+      const { data, error } = await query;
+      if (error || !data || data.length === 0) {
+        let filtered = fallbackServices;
+        if (category) {
+          filtered = filtered.filter(s => s.category.toLowerCase() === category.toLowerCase());
+        }
+        setServices(filtered);
+      } else {
+        setServices((data as Service[]) ?? []);
+      }
+    } catch {
+      let filtered = fallbackServices;
+      if (category) {
+        filtered = filtered.filter(s => s.category.toLowerCase() === category.toLowerCase());
+      }
+      setServices(filtered);
+    }
     setLoading(false);
   }, [category]);
 

@@ -1,20 +1,25 @@
 import { createClient } from '@supabase/supabase-js';
-import type { Database } from './database.types';
+export type { Database } from './database.types';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+const rawUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const rawAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn(
-    'Supabase credentials not found. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env'
-  );
-}
+export const isSupabaseConfigured = Boolean(
+  rawUrl &&
+  rawAnonKey &&
+  rawUrl !== 'https://your-project.supabase.co' &&
+  !rawUrl.includes('your-project') &&
+  rawAnonKey !== 'your-anon-key-here' &&
+  rawAnonKey.length > 20
+);
 
-export const supabase = createClient<Database>(
-  supabaseUrl ?? '',
-  supabaseAnonKey ?? ''
+// Fallback client placeholder for offline/static deployment
+export const supabase = createClient(
+  isSupabaseConfigured ? rawUrl! : 'https://placeholder.supabase.co',
+  isSupabaseConfigured ? rawAnonKey! : 'anon-key-placeholder'
 );
 
 export function getStorageUrl(bucket: string, path: string): string {
-  return `${supabaseUrl}/storage/v1/object/public/${bucket}/${path}`;
+  if (!isSupabaseConfigured || !rawUrl) return path;
+  return `${rawUrl}/storage/v1/object/public/${bucket}/${path}`;
 }

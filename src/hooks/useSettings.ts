@@ -1,11 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 export function useSiteSettings<T = Record<string, unknown>>(key: string) {
   const [value, setValue] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!isSupabaseConfigured) {
+      setLoading(false);
+      return;
+    }
     supabase
       .from('site_settings')
       .select('value')

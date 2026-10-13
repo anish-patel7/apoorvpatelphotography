@@ -1,194 +1,292 @@
 import { useState } from 'react';
-import { Search, Eye, X, MessageCircle, Mail, Phone } from 'lucide-react';
+import { Search, Eye, X, Mail, Phone, Calendar, RefreshCw, Trash2 } from 'lucide-react';
+import { useLeadsAdmin, type Lead } from '../../hooks/useLeads';
+import type { LeadStatus } from '../../lib/database.types';
 
-interface Lead {
-  id: string;
-  name: string;
-  email: string;
-  mobile: string;
-  service: string;
-  eventType: string;
-  eventDate: string;
-  location: string;
-  status: string;
-  source: string;
-  createdAt: string;
-  message: string;
-  notes: string[];
-}
-
-const initialLeads: Lead[] = [
-  { id: '1', name: 'Priya Sharma', email: 'priya@example.com', mobile: '+91 98765 43210', service: 'Wedding Photography', eventType: 'Wedding', eventDate: '2026-12-15', location: 'Ahmedabad', status: 'new', source: 'Website', createdAt: '2026-08-28', message: 'Looking for complete wedding photography coverage for a 3-day event.', notes: [] },
-  { id: '2', name: 'James Wilson', email: 'james@example.com', mobile: '+44 7700 900123', service: 'Photo Editing', eventType: '', eventDate: '', location: 'London', status: 'contacted', source: 'Instagram', createdAt: '2026-08-27', message: 'Need 200 photos edited for a wedding album.', notes: ['Called on 28th, discussed requirements'] },
-  { id: '3', name: 'Neha Patel', email: 'neha@example.com', mobile: '+91 87654 32109', service: 'Pre-Wedding Shoot', eventType: 'Pre-Wedding', eventDate: '2026-11-20', location: 'Udaipur', status: 'quotation_sent', source: 'WhatsApp', createdAt: '2026-08-26', message: 'Want a cinematic pre-wedding shoot at City Palace.', notes: ['Sent quotation for 2-day shoot'] },
-  { id: '4', name: 'Ravi Kumar', email: 'ravi@example.com', mobile: '+91 76543 21098', service: 'Photography Training', eventType: '', eventDate: '', location: 'Mumbai', status: 'new', source: 'Website', createdAt: '2026-08-25', message: 'Interested in the photography masterclass, weekend batch.', notes: [] },
-  { id: '5', name: 'Sarah Thompson', email: 'sarah@example.com', mobile: '+44 7700 900456', service: 'Wedding Videography', eventType: 'Wedding', eventDate: '2027-03-10', location: 'Manchester', status: 'confirmed', source: 'Referral', createdAt: '2026-08-24', message: 'Looking for cinematic wedding film with drone coverage.', notes: ['Confirmed booking', 'Advance received'] },
+const statusOptions: LeadStatus[] = [
+  'new',
+  'contacted',
+  'requirement_confirmed',
+  'quotation_sent',
+  'follow_up',
+  'confirmed',
+  'completed',
+  'lost',
+  'cancelled',
 ];
 
-const statusOptions = ['new', 'contacted', 'requirement_confirmed', 'quotation_sent', 'follow_up', 'confirmed', 'completed', 'lost', 'cancelled'];
 const statusColors: Record<string, string> = {
-  new: 'bg-blue-400/10 text-blue-400',
-  contacted: 'bg-yellow-400/10 text-yellow-400',
-  requirement_confirmed: 'bg-indigo-400/10 text-indigo-400',
-  quotation_sent: 'bg-purple-400/10 text-purple-400',
-  follow_up: 'bg-orange-400/10 text-orange-400',
-  confirmed: 'bg-green-400/10 text-green-400',
-  completed: 'bg-brand-saffron/10 text-brand-saffron',
-  lost: 'bg-red-400/10 text-red-400',
-  cancelled: 'bg-gray-400/10 text-gray-400',
+  new: 'bg-blue-500/15 text-blue-300 border border-blue-500/30',
+  contacted: 'bg-amber-500/15 text-amber-300 border border-amber-500/30',
+  requirement_confirmed: 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30',
+  quotation_sent: 'bg-purple-500/15 text-purple-300 border border-purple-500/30',
+  follow_up: 'bg-orange-500/15 text-orange-300 border border-orange-500/30',
+  confirmed: 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30',
+  completed: 'bg-tertiary/15 text-tertiary border border-tertiary/30',
+  lost: 'bg-rose-500/15 text-rose-300 border border-rose-500/30',
+  cancelled: 'bg-neutral-500/15 text-neutral-300 border border-neutral-500/30',
 };
 
 export default function AdminLeads() {
-  const [leads, setLeads] = useState(initialLeads);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [newNote, setNewNote] = useState('');
 
-  const filtered = leads.filter(l => {
-    const matchesSearch = l.name.toLowerCase().includes(search.toLowerCase()) || l.service.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || l.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const { leads, loading, updateStatus, addNote, remove, refetch } = useLeadsAdmin(
+    statusFilter === 'all' ? undefined : (statusFilter as LeadStatus),
+    search
+  );
 
-  const updateStatus = (id: string, status: string) => {
-    setLeads(prev => prev.map(l => l.id === id ? { ...l, status } : l));
-    if (selectedLead?.id === id) setSelectedLead(prev => prev ? { ...prev, status } : null);
+  const handleStatusChange = async (id: string, status: LeadStatus) => {
+    await updateStatus(id, status);
+    if (selectedLead?.id === id) {
+      setSelectedLead(prev => prev ? { ...prev, status } : null);
+    }
   };
 
-  const addNote = (id: string) => {
+  const handleAddNote = async (id: string) => {
     if (!newNote.trim()) return;
-    setLeads(prev => prev.map(l => l.id === id ? { ...l, notes: [...l.notes, newNote] } : l));
-    if (selectedLead?.id === id) setSelectedLead(prev => prev ? { ...prev, notes: [...prev.notes, newNote] } : null);
+    await addNote(id, newNote);
+    if (selectedLead?.id === id) {
+      setSelectedLead(prev => prev ? { ...prev, notes: [...prev.notes, newNote.trim()] } : null);
+    }
     setNewNote('');
   };
 
+  const handleDelete = async (id: string) => {
+    if (window.confirm('Are you sure you want to delete this customer inquiry?')) {
+      await remove(id);
+      if (selectedLead?.id === id) setSelectedLead(null);
+    }
+  };
+
   return (
-    <div>
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-        <h2 className="font-heading text-2xl font-bold">Leads / Inquiries</h2>
-        <div className="flex flex-wrap gap-2">
-          <div className="relative">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="font-display text-2xl sm:text-3xl font-bold text-on-surface">Customer Inquiries</h2>
+          <p className="text-on-surface-variant text-sm mt-1">Manage incoming client inquiries, requests, and follow-ups securely</p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+          <div className="relative flex-1 sm:flex-none">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" />
             <input
               type="text"
-              placeholder="Search leads..."
+              placeholder="Search by name, email, or phone..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="bg-white/5 border border-white/10 rounded-lg pl-9 pr-4 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-brand-saffron/50 w-56"
+              className="bg-surface-container-lowest border border-outline-variant/40 rounded-lg pl-9 pr-4 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none focus:border-tertiary focus:ring-1 focus:ring-tertiary/40 w-full sm:w-64 transition-colors"
             />
           </div>
+
           <select
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value)}
-            className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-saffron/50"
+            className="bg-surface-container-lowest border border-outline-variant/40 rounded-lg px-3.5 py-2 text-sm text-on-surface focus:outline-none focus:border-tertiary focus:ring-1 focus:ring-tertiary/40 cursor-pointer transition-colors"
           >
-            <option value="all">All Status</option>
-            {statusOptions.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
+            <option value="all" className="bg-surface-container text-on-surface">All Statuses ({leads.length})</option>
+            {statusOptions.map(s => (
+              <option key={s} value={s} className="bg-surface-container text-on-surface">
+                {s.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+              </option>
+            ))}
           </select>
+
+          <button
+            onClick={() => refetch()}
+            disabled={loading}
+            className="p-2 bg-surface-container border border-outline-variant/40 rounded-lg text-on-surface-variant hover:text-on-surface transition-colors"
+            title="Refresh Inquiries"
+          >
+            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+          </button>
         </div>
       </div>
 
-      <div className="bg-brand-charcoal rounded-xl border border-white/5 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-white/40 text-left border-b border-white/5">
-              <th className="px-5 py-3 font-medium">Name</th>
-              <th className="px-5 py-3 font-medium">Service</th>
-              <th className="px-5 py-3 font-medium">Source</th>
-              <th className="px-5 py-3 font-medium">Date</th>
-              <th className="px-5 py-3 font-medium">Status</th>
-              <th className="px-5 py-3 font-medium">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(lead => (
-              <tr key={lead.id} className="border-b border-white/5 hover:bg-white/[0.02]">
-                <td className="px-5 py-3 font-medium">{lead.name}</td>
-                <td className="px-5 py-3 text-white/60">{lead.service}</td>
-                <td className="px-5 py-3 text-white/60">{lead.source}</td>
-                <td className="px-5 py-3 text-white/60">{lead.createdAt}</td>
-                <td className="px-5 py-3">
-                  <select
-                    value={lead.status}
-                    onChange={e => updateStatus(lead.id, e.target.value)}
-                    className={`px-2.5 py-1 rounded-full text-xs font-medium border-0 focus:outline-none cursor-pointer ${statusColors[lead.status] || ''}`}
-                  >
-                    {statusOptions.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
-                  </select>
-                </td>
-                <td className="px-5 py-3">
-                  <button onClick={() => setSelectedLead(lead)} className="text-brand-saffron hover:text-brand-gold">
-                    <Eye size={16} />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {filtered.length === 0 && (
-          <div className="text-center py-12 text-white/40">No leads found.</div>
+      <div className="bg-surface-container-low rounded-xl border border-outline-variant/30 overflow-hidden shadow-xs">
+        {loading && leads.length === 0 ? (
+          <div className="text-center py-16 text-on-surface-variant text-sm">
+            <RefreshCw size={20} className="animate-spin mx-auto mb-2 text-tertiary" />
+            <span>Loading inquiries...</span>
+          </div>
+        ) : leads.length === 0 ? (
+          <div className="text-center py-16 px-4">
+            <div className="w-12 h-12 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant mx-auto mb-3">
+              <Mail size={22} />
+            </div>
+            <p className="text-on-surface font-medium text-sm">No Inquiries Found</p>
+            <p className="text-on-surface-variant text-xs mt-1 max-w-sm mx-auto">
+              {search || statusFilter !== 'all'
+                ? 'Try clearing your filters or search terms.'
+                : 'When potential clients reach out via the website, their details will appear here.'}
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-surface-container-lowest/50 text-on-surface-variant text-left border-b border-outline-variant/30">
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider">Client Name</th>
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider">Service / Event</th>
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider">Channel</th>
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider">Date</th>
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider">Status</th>
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-outline-variant/20">
+                {leads.map(lead => (
+                  <tr key={lead.id} className="hover:bg-surface-container/60 transition-colors">
+                    <td className="px-5 py-3.5">
+                      <div className="font-semibold text-on-surface">{lead.name}</div>
+                      <div className="text-on-surface-variant text-xs">{lead.mobile || lead.email}</div>
+                    </td>
+                    <td className="px-5 py-3.5 text-on-surface">{lead.service_type || lead.event_type || 'General'}</td>
+                    <td className="px-5 py-3.5">
+                      <span className="inline-block px-2 py-0.5 rounded-md bg-surface-container text-on-surface-variant text-xs font-medium border border-outline-variant/30">
+                        {lead.source}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5 text-on-surface-variant text-xs">
+                      {lead.event_date || new Date(lead.created_at).toLocaleDateString()}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <select
+                        value={lead.status}
+                        onChange={e => handleStatusChange(lead.id, e.target.value as LeadStatus)}
+                        className={`px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider cursor-pointer focus:outline-none transition-colors ${statusColors[lead.status] || ''}`}
+                      >
+                        {statusOptions.map(s => (
+                          <option key={s} value={s} className="bg-surface-container text-on-surface font-normal normal-case">
+                            {s.replace('_', ' ')}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-5 py-3.5 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => setSelectedLead(lead)}
+                          className="p-1.5 text-on-surface-variant hover:text-tertiary transition-colors"
+                          title="View Details"
+                        >
+                          <Eye size={16} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(lead.id)}
+                          className="p-1.5 text-on-surface-variant hover:text-error transition-colors"
+                          title="Delete Inquiry"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
+      {/* Selected Inquiry Modal */}
       {selectedLead && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setSelectedLead(null)}>
-          <div className="bg-brand-charcoal rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto border border-white/10" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-6 border-b border-white/5">
-              <h3 className="font-heading text-xl font-semibold">Lead Details</h3>
-              <button onClick={() => setSelectedLead(null)} className="text-white/40 hover:text-white"><X size={20} /></button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div><span className="text-white/40 block">Name</span>{selectedLead.name}</div>
-                <div><span className="text-white/40 block">Service</span>{selectedLead.service}</div>
-                <div><span className="text-white/40 block">Email</span>{selectedLead.email}</div>
-                <div><span className="text-white/40 block">Mobile</span>{selectedLead.mobile}</div>
-                {selectedLead.eventType && <div><span className="text-white/40 block">Event</span>{selectedLead.eventType}</div>}
-                {selectedLead.eventDate && <div><span className="text-white/40 block">Date</span>{selectedLead.eventDate}</div>}
-                <div><span className="text-white/40 block">Location</span>{selectedLead.location}</div>
-                <div><span className="text-white/40 block">Source</span>{selectedLead.source}</div>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-surface-container-low rounded-2xl max-w-lg w-full p-6 border border-outline-variant/30 space-y-6 max-h-[90vh] overflow-y-auto shadow-2xl">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="font-display text-xl font-bold text-on-surface">{selectedLead.name}</h3>
+                <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider mt-1 ${statusColors[selectedLead.status] || ''}`}>
+                  {selectedLead.status.replace('_', ' ')}
+                </span>
               </div>
+              <button
+                onClick={() => setSelectedLead(null)}
+                className="p-1.5 text-on-surface-variant hover:text-on-surface rounded-lg transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
 
-              <div className="text-sm">
-                <span className="text-white/40 block mb-1">Message</span>
-                <p className="text-white/70 bg-white/5 rounded-lg p-3">{selectedLead.message}</p>
+            <div className="grid grid-cols-2 gap-3 text-xs bg-surface-container-lowest rounded-xl p-4 border border-outline-variant/20">
+              <div>
+                <span className="text-on-surface-variant block uppercase tracking-wider text-[10px]">Email</span>
+                <a href={`mailto:${selectedLead.email}`} className="text-tertiary font-medium flex items-center gap-1 mt-0.5 break-all">
+                  <Mail size={12} className="shrink-0" /> {selectedLead.email}
+                </a>
+              </div>
+              <div>
+                <span className="text-on-surface-variant block uppercase tracking-wider text-[10px]">Phone / Mobile</span>
+                <a href={`tel:${selectedLead.mobile}`} className="text-on-surface font-medium flex items-center gap-1 mt-0.5">
+                  <Phone size={12} className="shrink-0" /> {selectedLead.mobile || 'Not provided'}
+                </a>
+              </div>
+              {selectedLead.location && (
+                <div>
+                  <span className="text-on-surface-variant block uppercase tracking-wider text-[10px]">Location</span>
+                  <span className="text-on-surface font-medium mt-0.5 block">{selectedLead.location}</span>
+                </div>
+              )}
+              {selectedLead.event_date && (
+                <div>
+                  <span className="text-on-surface-variant block uppercase tracking-wider text-[10px]">Event Date</span>
+                  <span className="text-on-surface font-medium mt-0.5 flex items-center gap-1">
+                    <Calendar size={12} /> {selectedLead.event_date}
+                  </span>
+                </div>
+              )}
+              {selectedLead.budget && (
+                <div>
+                  <span className="text-on-surface-variant block uppercase tracking-wider text-[10px]">Budget</span>
+                  <span className="text-on-surface font-medium mt-0.5 block">{selectedLead.budget}</span>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <span className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider block mb-1.5">
+                Client Message
+              </span>
+              <div className="p-3 bg-surface-container-lowest rounded-lg border border-outline-variant/30 text-xs text-on-surface leading-relaxed whitespace-pre-wrap">
+                {selectedLead.message || 'No message provided.'}
+              </div>
+            </div>
+
+            {/* Admin Notes */}
+            <div className="space-y-3 pt-2 border-t border-outline-variant/30">
+              <span className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider block">
+                Internal Studio Notes
+              </span>
+              <div className="space-y-2">
+                {selectedLead.notes && selectedLead.notes.length > 0 ? (
+                  selectedLead.notes.map((note, i) => (
+                    <div key={i} className="p-2.5 bg-surface-container rounded-lg text-xs text-on-surface border border-outline-variant/20">
+                      {note}
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-on-surface-variant italic">No internal notes added yet.</p>
+                )}
               </div>
 
               <div className="flex gap-2">
-                <a href={`mailto:${selectedLead.email}`} className="flex items-center gap-1 px-3 py-1.5 bg-white/5 rounded-lg text-xs hover:bg-white/10 transition-colors">
-                  <Mail size={14} /> Email
-                </a>
-                <a href={`tel:${selectedLead.mobile}`} className="flex items-center gap-1 px-3 py-1.5 bg-white/5 rounded-lg text-xs hover:bg-white/10 transition-colors">
-                  <Phone size={14} /> Call
-                </a>
-                <a href={`https://wa.me/${selectedLead.mobile.replace(/\s/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 px-3 py-1.5 bg-green-500/10 text-green-400 rounded-lg text-xs hover:bg-green-500/20 transition-colors">
-                  <MessageCircle size={14} /> WhatsApp
-                </a>
-              </div>
-
-              <div>
-                <span className="text-white/40 text-sm block mb-2">Notes</span>
-                {selectedLead.notes.length > 0 ? (
-                  <ul className="space-y-1 mb-3">
-                    {selectedLead.notes.map((n, i) => <li key={i} className="text-sm text-white/60 bg-white/5 rounded-lg p-2">{n}</li>)}
-                  </ul>
-                ) : (
-                  <p className="text-white/30 text-sm mb-3">No notes yet.</p>
-                )}
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newNote}
-                    onChange={e => setNewNote(e.target.value)}
-                    placeholder="Add a note..."
-                    className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-brand-saffron/50"
-                    onKeyDown={e => e.key === 'Enter' && addNote(selectedLead.id)}
-                  />
-                  <button onClick={() => addNote(selectedLead.id)} className="px-4 py-2 bg-brand-saffron text-black text-sm font-medium rounded-lg hover:bg-brand-gold transition-colors">
-                    Add
-                  </button>
-                </div>
+                <input
+                  type="text"
+                  placeholder="Add note..."
+                  value={newNote}
+                  onChange={e => setNewNote(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleAddNote(selectedLead.id); }}
+                  className="flex-1 bg-surface-container-lowest border border-outline-variant/40 rounded-lg px-3 py-2 text-xs text-on-surface focus:outline-none focus:border-tertiary"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleAddNote(selectedLead.id)}
+                  className="px-3 py-2 bg-tertiary text-on-tertiary text-xs font-semibold rounded-lg hover:bg-tertiary-fixed transition-colors"
+                >
+                  Add
+                </button>
               </div>
             </div>
           </div>

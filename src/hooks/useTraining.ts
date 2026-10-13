@@ -1,21 +1,42 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { trainingCourses } from '../data/training';
 
-interface Course {
+export interface Course {
   id: string;
   title: string;
+  slug?: string;
   description: string;
   duration: string;
   level: string;
   curriculum: string[];
+  syllabus?: string[];
   tools: string[];
   fee: string;
+  price_label?: string;
   mode: string;
   image: string;
+  is_active?: boolean;
   sort_order: number;
   created_at: string;
   updated_at: string;
 }
+
+const fallbackCourses: Course[] = trainingCourses.map((c, idx) => ({
+  id: c.id,
+  title: c.title,
+  description: c.description,
+  duration: c.duration,
+  level: c.level,
+  curriculum: c.curriculum,
+  tools: c.tools,
+  fee: c.fee,
+  mode: c.mode,
+  image: c.image,
+  sort_order: idx + 1,
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+}));
 
 export function useTraining() {
   const [courses, setCourses] = useState<Course[]>([]);
@@ -23,13 +44,26 @@ export function useTraining() {
 
   const fetch = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('training_courses')
-      .select('*')
-      .order('sort_order');
+    if (!isSupabaseConfigured) {
+      setCourses(fallbackCourses);
+      setLoading(false);
+      return;
+    }
 
-    if (error) console.error('Training fetch error:', error);
-    setCourses((data as Course[]) ?? []);
+    try {
+      const { data, error } = await supabase
+        .from('training_courses')
+        .select('*')
+        .order('sort_order');
+
+      if (error || !data || data.length === 0) {
+        setCourses(fallbackCourses);
+      } else {
+        setCourses((data as Course[]) ?? []);
+      }
+    } catch {
+      setCourses(fallbackCourses);
+    }
     setLoading(false);
   }, []);
 

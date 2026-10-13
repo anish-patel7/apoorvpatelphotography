@@ -24,61 +24,117 @@ export default function AdminLayout({ children, onLogout }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
 
-  const isActive = (path: string) => {
-    if (path === '/admin') return location.pathname === '/admin';
-    return location.pathname.startsWith(path);
+  const basePath = location.pathname.startsWith('/admin/preview') ? '/admin/preview' : '/admin';
+  const getHref = (to: string) => {
+    if (basePath === '/admin/preview') {
+      const sub = to.replace('/admin', '');
+      return `${basePath}${sub}`;
+    }
+    return to;
+  };
+
+  const isActive = (itemTo: string) => {
+    const fullTarget = getHref(itemTo);
+    if (fullTarget === basePath) return location.pathname === basePath;
+    return location.pathname.startsWith(fullTarget);
   };
 
   return (
-    <div className="min-h-screen bg-background flex">
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-surface-container-low border-r border-outline-variant/20 transform transition-transform lg:translate-x-0 lg:static lg:block ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="flex items-center justify-between p-4 border-b border-outline-variant/20">
-          <h2 className="font-display text-lg text-on-surface">Admin</h2>
-          <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-on-surface-variant hover:text-on-surface">
+    <div className="min-h-screen bg-background text-on-surface flex">
+      {/* Sidebar */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-surface-container-low border-r border-outline-variant/30 transform transition-transform duration-300 lg:translate-x-0 lg:static lg:block ${
+          sidebarOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
+        }`}
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-outline-variant/30">
+          <div>
+            <h2 className="font-display text-lg text-on-surface font-semibold tracking-wide">
+              Apoorv Patel
+            </h2>
+            <p className="text-[11px] uppercase tracking-[0.15em] text-on-surface-variant font-medium">
+              Admin Workspace
+            </p>
+          </div>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            aria-label="Close sidebar"
+            className="lg:hidden p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors"
+          >
             <X size={20} />
           </button>
         </div>
 
-        <nav className="p-4 space-y-1">
-          {sidebarItems.map(item => (
-            <Link
-              key={item.to}
-              to={item.to}
-              onClick={() => setSidebarOpen(false)}
-              className={`flex items-center gap-3 px-4 py-2.5 rounded-sm text-sm font-semibold transition-all ${
-                isActive(item.to)
-                  ? 'bg-tertiary/20 text-tertiary'
-                  : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
-              }`}
-            >
-              <item.icon size={18} />
-              {item.label}
-              {isActive(item.to) && <ChevronRight size={14} className="ml-auto" />}
-            </Link>
-          ))}
+        <nav className="p-3 space-y-1">
+          {sidebarItems.map(item => {
+            const active = isActive(item.to);
+            return (
+              <Link
+                key={item.to}
+                to={getHref(item.to)}
+                onClick={() => setSidebarOpen(false)}
+                className={`flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm transition-all duration-200 ${
+                  active
+                    ? 'bg-tertiary/15 text-tertiary font-semibold border-l-2 border-tertiary pl-3'
+                    : 'text-on-surface-variant hover:bg-surface-container/70 hover:text-on-surface font-medium'
+                }`}
+              >
+                <item.icon size={18} className={active ? 'text-tertiary' : 'text-on-surface-variant'} />
+                <span>{item.label}</span>
+                {active && <ChevronRight size={14} className="ml-auto text-tertiary" />}
+              </Link>
+            );
+          })}
         </nav>
 
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-outline-variant/20">
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-outline-variant/30 bg-surface-container-low">
           <button
             onClick={onLogout}
-            className="flex items-center gap-3 px-4 py-2.5 rounded-sm text-sm font-semibold text-on-surface-variant hover:bg-error/20 hover:text-error transition-all w-full"
+            className="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium text-on-surface-variant hover:bg-error/15 hover:text-error transition-all w-full"
           >
             <LogOut size={18} /> Sign Out
           </button>
         </div>
       </aside>
 
-      {sidebarOpen && <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setSidebarOpen(false)} />}
+      {/* Mobile Backdrop */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/70 backdrop-blur-xs lg:hidden transition-opacity"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
 
-      <div className="flex-1 min-w-0">
-        <header className="sticky top-0 z-30 bg-surface-container-low/95 backdrop-blur-sm border-b border-outline-variant/20 px-4 sm:px-6 py-4 flex items-center gap-4">
-          <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-on-surface-variant hover:text-on-surface">
-            <Menu size={24} />
-          </button>
-          <h1 className="font-display text-xl font-semibold text-on-surface">Admin Dashboard</h1>
-          <Link to="/" className="ml-auto text-sm text-tertiary hover:text-tertiary/80 font-semibold">← View Website</Link>
+      {/* Main Content Area */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        <header className="sticky top-0 z-30 bg-surface-container-low/95 backdrop-blur-md border-b border-outline-variant/30 px-4 sm:px-6 py-3.5 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              aria-label="Open sidebar"
+              className="lg:hidden p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors"
+            >
+              <Menu size={22} />
+            </button>
+            <h1 className="font-display text-lg sm:text-xl font-semibold text-on-surface tracking-tight">
+              Admin Portal
+            </h1>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Link
+              to="/"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-tertiary hover:bg-tertiary/10 transition-colors border border-tertiary/30"
+            >
+              <span>← View Website</span>
+            </Link>
+          </div>
         </header>
-        <main className="p-4 sm:p-6 lg:p-8">{children}</main>
+
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+          {children}
+        </main>
       </div>
     </div>
   );

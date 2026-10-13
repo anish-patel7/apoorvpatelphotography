@@ -13,16 +13,45 @@ const navLinks = [
 export default function Header() {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const [isDark, setIsDark] = useState(true);
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('theme');
+      if (stored) return stored === 'dark';
+      return document.documentElement.classList.contains('dark');
+    }
+    return true;
+  });
   const location = useLocation();
+
+  const rawWhatsApp = import.meta.env.VITE_WHATSAPP_NUMBER || '';
+  const cleanWhatsApp = rawWhatsApp.replace(/\D/g, '');
+  const isWhatsAppValid = Boolean(cleanWhatsApp && cleanWhatsApp.length >= 8 && cleanWhatsApp.length <= 15);
+  const whatsappUrl = isWhatsAppValid
+    ? `https://wa.me/${cleanWhatsApp}?text=${encodeURIComponent("Hi, I'm interested in your photography services.")}`
+    : null;
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 50);
-    window.addEventListener('scroll', onScroll);
+    window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  useEffect(() => { setIsOpen(false); }, [location]);
+  // Close mobile drawer on route change
+  useEffect(() => {
+    setIsOpen(false);
+  }, [location]);
+
+  // Prevent background scrolling when mobile menu is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
 
   const toggleTheme = () => {
     const html = document.documentElement;
@@ -41,14 +70,18 @@ export default function Header() {
 
   return (
     <nav className={`fixed top-0 w-full z-50 border-b transition-all duration-300 ${
-      scrolled ? 'bg-background/80 backdrop-blur-xl border-outline-variant/10' : 'bg-transparent border-transparent'
+      scrolled ? 'bg-background/85 backdrop-blur-xl border-outline-variant/15 shadow-sm' : 'bg-transparent border-transparent'
     }`}>
-      <div className="flex justify-between items-center px-5 md:px-16 py-6 max-w-[1440px] mx-auto">
-        <Link to="/" className="font-display text-[28px] md:text-[32px] text-on-background tracking-tight leading-tight">
+      <div className="flex justify-between items-center px-4 sm:px-8 md:px-16 py-4 sm:py-5 md:py-6 max-w-[1440px] mx-auto">
+        <Link
+          to="/"
+          className="font-display text-[18px] sm:text-[24px] md:text-[32px] text-on-background tracking-tight leading-tight truncate mr-2"
+        >
           Apoorvpatel Photography
         </Link>
 
-        <div className="hidden md:flex gap-8 items-center">
+        {/* Desktop Navigation */}
+        <div className="hidden md:flex gap-6 lg:gap-8 items-center">
           {navLinks.map(link => (
             <Link
               key={link.to}
@@ -64,10 +97,11 @@ export default function Header() {
           ))}
         </div>
 
-        <div className="hidden md:flex items-center gap-6">
+        {/* Desktop Actions */}
+        <div className="hidden md:flex items-center gap-4 lg:gap-6">
           <button
             onClick={toggleTheme}
-            className="text-on-surface-variant hover:text-on-surface transition-colors"
+            className="text-on-surface-variant hover:text-on-surface transition-colors p-1.5 rounded-lg focus:outline-none focus:ring-1 focus:ring-tertiary/40"
             aria-label="Toggle theme"
             title={isDark ? "Switch to light mode" : "Switch to dark mode"}
           >
@@ -75,78 +109,117 @@ export default function Header() {
               {isDark ? 'light_mode' : 'dark_mode'}
             </span>
           </button>
-          <div className="flex gap-4 text-on-surface-variant">
-            <a
-              href="https://wa.me/?text=Hi%2C%20I%27m%20interested%20in%20your%20photography%20services."
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-tertiary transition-colors hover:scale-105 duration-400"
-            >
-              <span className="material-symbols-outlined">chat</span>
-            </a>
+          <div className="flex gap-4 text-on-surface-variant items-center">
+            {whatsappUrl ? (
+              <a
+                href={whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-tertiary transition-colors hover:scale-105 duration-300"
+                aria-label="Chat on WhatsApp"
+              >
+                <span className="material-symbols-outlined">chat</span>
+              </a>
+            ) : (
+              <Link
+                to="/contact"
+                className="hover:text-tertiary transition-colors hover:scale-105 duration-300"
+                aria-label="Contact Studio"
+                title="Contact Studio"
+              >
+                <span className="material-symbols-outlined">mail</span>
+              </Link>
+            )}
             <a
               href="https://www.instagram.com/apoorvpatel_photography/"
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:text-tertiary transition-colors hover:scale-105 duration-400"
+              className="hover:text-tertiary transition-colors hover:scale-105 duration-300"
+              aria-label="Instagram Profile"
             >
               <span className="material-symbols-outlined">photo_camera</span>
             </a>
           </div>
           <Link
             to="/contact"
-            className="bg-on-background text-background font-body text-[14px] font-semibold tracking-[0.05em] px-6 py-3 btn-cinematic hover:bg-tertiary-fixed hover:text-on-tertiary rounded-sm"
+            className="bg-on-background text-background font-body text-[13px] font-semibold tracking-[0.05em] px-5 py-2.5 btn-cinematic hover:bg-tertiary-fixed hover:text-on-tertiary rounded-sm transition-colors whitespace-nowrap"
           >
             Get a Quote
           </Link>
         </div>
 
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="md:hidden text-primary"
-          aria-label="Toggle menu"
-        >
-          <span className="material-symbols-outlined text-[28px]">
-            {isOpen ? 'close' : 'menu'}
-          </span>
-        </button>
+        {/* Mobile Hamburger & Theme Toggle */}
+        <div className="md:hidden flex items-center gap-2">
+          <button
+            onClick={toggleTheme}
+            className="text-on-surface-variant hover:text-on-surface p-2 rounded-lg transition-colors"
+            aria-label="Toggle theme"
+            title={isDark ? "Light mode" : "Dark mode"}
+          >
+            <span className="material-symbols-outlined text-[22px]">
+              {isDark ? 'light_mode' : 'dark_mode'}
+            </span>
+          </button>
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            className="text-primary p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-tertiary/40"
+            aria-label={isOpen ? "Close menu" : "Open menu"}
+          >
+            <span className="material-symbols-outlined text-[28px]">
+              {isOpen ? 'close' : 'menu'}
+            </span>
+          </button>
+        </div>
       </div>
 
+      {/* Mobile Drawer */}
       {isOpen && (
-        <div className="md:hidden bg-background/98 backdrop-blur-xl border-t border-outline-variant/10">
-          <div className="px-5 py-8 space-y-1">
+        <div className="md:hidden bg-background/98 backdrop-blur-2xl border-t border-outline-variant/15 max-h-[calc(100vh-72px)] overflow-y-auto shadow-2xl">
+          <div className="px-5 py-6 space-y-1">
             {navLinks.map(link => (
               <Link
                 key={link.to}
                 to={link.to}
-                className={`block py-3 font-body text-[14px] font-semibold tracking-[0.1em] uppercase transition-colors ${
-                  isActive(link.to) ? 'text-tertiary' : 'text-on-surface-variant hover:text-on-surface'
+                onClick={() => setIsOpen(false)}
+                className={`block py-3 font-body text-[15px] font-semibold tracking-[0.1em] uppercase transition-colors border-b border-outline-variant/10 last:border-b-0 ${
+                  isActive(link.to) ? 'text-tertiary pl-2 border-l-2 border-l-tertiary' : 'text-on-surface-variant hover:text-on-surface'
                 }`}
               >
                 {link.label}
               </Link>
             ))}
-            <div className="pt-6 border-t border-outline-variant/10 mt-4 flex items-center gap-6">
-              <a
-                href="https://wa.me/?text=Hi"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 text-on-surface-variant hover:text-tertiary text-sm"
-              >
-                <span className="material-symbols-outlined text-[20px]">chat</span> WhatsApp
-              </a>
+            <div className="pt-6 border-t border-outline-variant/15 mt-4 flex items-center justify-around text-on-surface-variant">
+              {whatsappUrl ? (
+                <a
+                  href={whatsappUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 hover:text-tertiary text-sm py-2 font-medium"
+                >
+                  <span className="material-symbols-outlined text-[20px]">chat</span> WhatsApp
+                </a>
+              ) : (
+                <Link
+                  to="/contact"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-2 hover:text-tertiary text-sm py-2 font-medium"
+                >
+                  <span className="material-symbols-outlined text-[20px]">mail</span> Inquire
+                </Link>
+              )}
               <a
                 href="https://www.instagram.com/apoorvpatel_photography/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 text-on-surface-variant hover:text-tertiary text-sm"
+                className="flex items-center gap-2 hover:text-tertiary text-sm py-2 font-medium"
               >
                 <span className="material-symbols-outlined text-[20px]">photo_camera</span> Instagram
               </a>
             </div>
             <Link
               to="/contact"
-              className="block mt-6 text-center bg-on-background text-background font-body text-[14px] font-semibold tracking-[0.05em] px-6 py-4 rounded-sm"
+              onClick={() => setIsOpen(false)}
+              className="block mt-6 text-center bg-on-background text-background font-body text-[14px] font-semibold tracking-[0.05em] px-6 py-3.5 rounded-sm shadow-sm"
             >
               Get a Quote
             </Link>

@@ -41,9 +41,39 @@
   --color-inverse-surface: #e5e2e1;
   --color-inverse-on-surface: #313030;
 
+  /* Brand Aliases for Admin & Components */
+  --color-brand-charcoal: #1c1b1b;
+  --color-brand-dark: #141313;
+  --color-brand-saffron: #ffb77a;
+  --color-brand-gold: #ffdcc2;
+
   /* Typography */
   --font-display: 'Bodoni Moda', Georgia, serif;
   --font-body: 'Montserrat', system-ui, sans-serif;
+  --font-heading: 'Montserrat', system-ui, sans-serif;
+}
+
+/* Accessible Select & Dropdown Styling */
+select {
+  color-scheme: dark;
+}
+
+select option {
+  background-color: #201f1f;
+  color: #e5e2e1;
+  padding: 8px 12px;
+}
+
+select option:checked {
+  background-color: #2b2a2a;
+  color: #ffb77a;
+  font-weight: 600;
+}
+
+select option:hover,
+select option:focus {
+  background-color: #353434;
+  color: #ffffff;
 }
 
 html {
