@@ -165,6 +165,7 @@ create table if not exists public.inquiries (
   customer_name text not null check (char_length(customer_name) >= 2),
   email text not null check (email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'),
   phone text not null default '',
+  whatsapp text default '',
   event_type text,
   event_date date,
   event_location text,
@@ -360,14 +361,12 @@ drop policy if exists "Reels admin full access" on public.instagram_reels;
 create policy "Reels admin full access" on public.instagram_reels
   for all using (public.is_admin());
 
--- Inquiries Policies (Strict Customer Privacy)
-drop policy if exists "Inquiries insert from public" on public.inquiries;
-create policy "Inquiries insert from public" on public.inquiries
-  for insert with check (
-    char_length(customer_name) >= 2 and
-    char_length(message) >= 5 and
-    email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'
-  );
+-- Inquiries Policies (Strict Customer Privacy & API Enforcement)
+revoke all on public.inquiries from public, anon;
+revoke all on public.leads from public, anon;
+
+grant select, insert, update, delete on public.inquiries to service_role;
+grant select, update, delete on public.inquiries to authenticated;
 
 -- Anonymously reading, modifying, or deleting inquiries is STRICTLY BLOCKED
 drop policy if exists "Inquiries admin view" on public.inquiries;

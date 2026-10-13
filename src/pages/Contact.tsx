@@ -1,5 +1,6 @@
-import { useState, useRef } from 'react';
-import { MessageCircle, Mail, Copy, Check, ArrowRight, ArrowLeft, AlertCircle, ExternalLink, Loader2, Database, ShieldCheck } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { CheckCircle2, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
 import SEO from '../components/common/SEO';
 import { useSubmitInquiry } from '../hooks/useLeads';
 
@@ -22,6 +23,7 @@ interface FormErrors {
   eventType?: string;
   editingType?: string;
   course?: string;
+  message?: string;
   general?: string;
 }
 
@@ -29,16 +31,16 @@ export default function Contact() {
   const { submit: submitToDb, submitting: dbSubmitting } = useSubmitInquiry();
 
   const [formType, setFormType] = useState<InquiryType>('photography');
-  const [isPrepared, setIsPrepared] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [hasOpenedExternal, setHasOpenedExternal] = useState(false);
-  const [submittedToDb, setSubmittedToDb] = useState(false);
-  const [dbInquiryId, setDbInquiryId] = useState<string | null>(null);
-  const [dbError, setDbError] = useState<string | null>(null);
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [submittedId, setSubmittedId] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [honeypot, setHoneypot] = useState('');
   const [errors, setErrors] = useState<FormErrors>({});
-  const formLoadTime = useRef(Date.now());
+  const formLoadTime = useRef<number>(0);
 
+  useEffect(() => {
+    formLoadTime.current = Date.now();
+  }, []);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -92,12 +94,11 @@ export default function Contact() {
       newErrors.email = 'Please enter a valid email address (e.g. name@domain.com).';
     }
 
-    // Phone validation: allow optional +, digits, spaces, dashes (min 7 digits)
     const phoneDigits = formData.mobile.replace(/\D/g, '');
     if (!formData.mobile.trim()) {
       newErrors.mobile = 'Please provide your contact phone or mobile number.';
-    } else if (phoneDigits.length < 7 || phoneDigits.length > 15) {
-      newErrors.mobile = 'Please enter a valid phone number with 7-15 digits.';
+    } else if (phoneDigits.length < 7 || phoneDigits.length > 20) {
+      newErrors.mobile = 'Please enter a valid phone number with 7-20 digits.';
     }
 
     if (formType === 'photography') {
@@ -106,8 +107,12 @@ export default function Contact() {
       }
       if (formData.eventDate) {
         const selectedDate = new Date(formData.eventDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
         if (isNaN(selectedDate.getTime())) {
           newErrors.eventDate = 'Please select a valid event date.';
+        } else if (selectedDate < today) {
+          newErrors.eventDate = 'Event date cannot be in the past.';
         }
       }
     }
@@ -118,6 +123,10 @@ export default function Contact() {
 
     if (formType === 'training' && !formData.course) {
       newErrors.course = 'Please choose a course or workshop.';
+    }
+
+    if (!formData.message.trim() || formData.message.trim().length < 5) {
+      newErrors.message = 'Please provide inquiry details / requirements (minimum 5 characters).';
     }
 
     setErrors(newErrors);
@@ -167,12 +176,12 @@ export default function Contact() {
     }
 
     lines.push(`-----------------------------------------`);
-    lines.push(`Sent via apoorvpatelphotography.com`);
+    lines.push(`Submitted via apoorvpatelphotography.com`);
 
     return lines.join('\n');
   };
 
-  const handlePrepareInquiry = (e: React.FormEvent) => {
+  const handleSubmitInquiry = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Anti-spam honeypot detection
@@ -181,73 +190,59 @@ export default function Contact() {
       return;
     }
 
+    // Minimum interaction timing check (anti-bot)
+    if (Date.now() - formLoadTime.current < 800) {
+      setSubmitError('Form interaction was too rapid. Please review your details and submit again.');
+      return;
+    }
+
     if (!validate()) {
       setErrors(prev => ({
         ...prev,
-        general: 'Please correct the highlighted fields before proceeding.',
+        general: 'Please correct the highlighted fields before submitting.',
       }));
       return;
     }
-    setIsPrepared(true);
-    setHasOpenedExternal(false);
-    setDbError(null);
-  };
 
-  const handleSaveToDatabase = async () => {
-    // Anti-spam timing check (minimum 1 second interaction)
-    if (Date.now() - formLoadTime.current < 1000) {
-      setDbError('Submission was received too quickly. Please review your details.');
-      return;
-    }
+    setSubmitError(null);
 
-    setDbError(null);
     const result = await submitToDb({
       name: formData.name,
       email: formData.email,
       phone: formData.mobile,
+      whatsapp: formData.whatsapp || formData.mobile,
       eventType: formType === 'photography' ? formData.eventType : getCategoryTitle(),
       eventDate: formData.eventDate || undefined,
       location: formData.location || undefined,
       budget: formData.budget || undefined,
       message: generateInquiryMessage(),
+      honeypot,
     });
 
     if (result.success) {
-      setSubmittedToDb(true);
-      setDbInquiryId(result.id || `APP-${Date.now().toString().slice(-6)}`);
+      setIsSuccess(true);
+      setSubmittedId(result.id || `APP-${Date.now().toString().slice(-6)}`);
+      // Reset form data only on confirmed success
+      setFormData({
+        name: '', mobile: '', whatsapp: '', email: '',
+        eventType: '', eventDate: '', location: '', services: '',
+        editingType: '', numPhotos: '', deliveryDate: '', reference: '',
+        course: '', experience: '', batch: '', modePreference: '',
+        message: '', budget: '',
+      });
+      setErrors({});
     } else {
-      setDbError(result.error || 'Failed to submit inquiry to studio database. You can still reach us via WhatsApp or Email below.');
+      // Submission failed: keep all inputs intact
+      setSubmitError(result.error || 'Failed to submit inquiry to studio database. Please retry or contact us directly via WhatsApp.');
     }
   };
 
-
-  const handleCopyMessage = async () => {
-    const message = generateInquiryMessage();
-    try {
-      await navigator.clipboard.writeText(message);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 3000);
-    } catch {
-      // Fallback
-    }
-  };
-
-  const handleOpenWhatsApp = () => {
-    if (!isWhatsAppConfigured) return;
-    const message = generateInquiryMessage();
-    const encoded = encodeURIComponent(message);
-    const url = `https://wa.me/${businessWhatsAppClean}?text=${encoded}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
-    setHasOpenedExternal(true);
-  };
-
-  const handleOpenEmail = () => {
-    const message = generateInquiryMessage();
-    const subject = encodeURIComponent(`[Website Inquiry] ${getCategoryTitle()} - ${formData.name.trim()}`);
-    const body = encodeURIComponent(message);
-    const url = `mailto:${businessEmail}?subject=${subject}&body=${body}`;
-    window.location.href = url;
-    setHasOpenedExternal(true);
+  const handleResetForm = () => {
+    setIsSuccess(false);
+    setSubmittedId(null);
+    setSubmitError(null);
+    setErrors({});
+    formLoadTime.current = Date.now();
   };
 
   const inputClass = (hasError?: boolean) =>
@@ -278,198 +273,53 @@ export default function Contact() {
           Get in Touch
         </h1>
         <p className="font-body text-[18px] text-on-surface-variant max-w-2xl mx-auto leading-relaxed">
-          Ready to capture your special moments? Prepare your inquiry below to connect with us directly via WhatsApp or Email.
+          Ready to capture your special moments? Submit your inquiry directly to our studio database below.
         </p>
       </header>
 
       <section className="px-5 md:px-16 pb-[120px] max-w-[1440px] mx-auto">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Main Form or Prepared Action Step */}
+          {/* Main Inquiry Form or Success Card */}
           <div className="lg:col-span-7 bg-surface-container-lowest p-8 md:p-12 border border-outline-variant/10 rounded-sm">
-            {isPrepared ? (
-              /* Action Step (Replaces false submission message) */
-              <div className="space-y-8 animate-fade-in">
-                <div>
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-tertiary/15 text-tertiary text-xs font-semibold uppercase tracking-wider mb-3">
-                    <Check size={14} /> Inquiry Compiled
-                  </div>
-                  <h2 className="font-display text-[28px] md:text-[36px] text-on-background leading-tight mb-2">
-                    Inquiry Ready to Dispatch
+            {isSuccess ? (
+              /* Success Confirmation View */
+              <div className="py-10 px-4 sm:px-8 text-center space-y-6 animate-fade-in">
+                <div className="w-16 h-16 mx-auto rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                  <CheckCircle2 size={36} />
+                </div>
+
+                <div className="space-y-3">
+                  <h2 className="font-display text-[26px] sm:text-[34px] text-on-background font-semibold leading-tight">
+                    Thank you for contacting Apoorv Patel Photography!
                   </h2>
-                  <p className="font-body text-[15px] text-on-surface-variant leading-relaxed">
-                    Your inquiry details have been structured below. Please choose your preferred channel to send them directly to our studio.
+                  <p className="font-body text-[16px] text-on-surface-variant max-w-lg mx-auto leading-relaxed">
+                    Your inquiry has been received successfully. Our team will review your requirements and contact you soon.
                   </p>
-                </div>
-
-                {/* Important Dispatch Instructions */}
-                <div className="bg-surface-container-low border border-tertiary/30 p-5 rounded-sm space-y-2">
-                  <div className="flex items-start gap-3">
-                    <AlertCircle size={20} className="text-tertiary shrink-0 mt-0.5" />
-                    <div className="space-y-1">
-                      <p className="font-body text-[14px] font-semibold text-on-surface">
-                        Complete Sending in Your App
-                      </p>
-                      <p className="font-body text-[13px] text-on-surface-variant leading-relaxed">
-                        Clicking <strong>Send via WhatsApp</strong> or <strong>Send via Email</strong> will launch the app with your pre-filled inquiry. You must hit <strong>Send</strong> inside the app so we receive your booking request.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Database Submission & Confirmation Section */}
-                <div className="bg-surface-container-low border border-outline-variant/20 p-5 rounded-sm space-y-3">
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <div className="flex items-center gap-2">
-                      <Database size={18} className="text-tertiary" />
-                      <span className="font-body text-[14px] font-semibold text-on-surface">
-                        Option: Register Directly in Studio System
-                      </span>
-                    </div>
-                    {submittedToDb && (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                        <ShieldCheck size={14} /> Registered #{dbInquiryId}
-                      </span>
-                    )}
-                  </div>
-                  <p className="font-body text-[13px] text-on-surface-variant leading-relaxed">
-                    Instantly save your booking inquiry to our private studio records. Our team will review your dates and get back to you via email or phone.
-                  </p>
-
-                  {submittedToDb ? (
-                    <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-sm space-y-1 text-sm text-emerald-300">
-                      <p className="font-semibold flex items-center gap-2">
-                        <Check size={16} /> Inquiry recorded successfully!
-                      </p>
-                      <p className="text-xs text-on-surface-variant">
-                        Reference ID: <code className="text-emerald-400 font-mono font-bold">{dbInquiryId}</code>. You may also notify us immediately via WhatsApp or Email below if your event is urgent.
-                      </p>
-                    </div>
-                  ) : (
-                    <div>
-                      {dbError && (
-                        <div className="mb-3 p-3 bg-error/15 border border-error/30 rounded-sm flex items-start gap-2 text-error text-xs">
-                          <AlertCircle size={16} className="shrink-0 mt-0.5" />
-                          <span>{dbError}</span>
-                        </div>
-                      )}
-                      <button
-                        type="button"
-                        onClick={handleSaveToDatabase}
-                        disabled={dbSubmitting}
-                        className="w-full bg-surface-container-high hover:bg-surface-container-highest border border-tertiary/40 hover:border-tertiary text-on-surface hover:text-tertiary font-body text-[13px] font-semibold tracking-[0.05em] px-5 py-3 rounded-sm flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
-                      >
-                        {dbSubmitting ? (
-                          <>
-                            <Loader2 size={16} className="animate-spin" />
-                            <span>Registering inquiry in studio database...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Database size={16} className="text-tertiary" />
-                            <span>Save Inquiry to Studio Database</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
+                  {submittedId && (
+                    <p className="font-mono text-xs text-on-surface-variant/80 pt-2">
+                      Inquiry Reference ID: <span className="text-tertiary font-bold">{submittedId}</span>
+                    </p>
                   )}
                 </div>
 
-                {/* Direct Action Buttons */}
-                <div className={`grid ${isWhatsAppConfigured ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'} gap-4`}>
-                  {isWhatsAppConfigured && (
-                    <button
-                      type="button"
-                      onClick={handleOpenWhatsApp}
-                      className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-body text-[14px] font-semibold tracking-[0.05em] px-6 py-4 rounded-sm flex items-center justify-center gap-2.5 transition-all shadow-md cursor-pointer"
-                    >
-                      <MessageCircle size={18} />
-                      <span>Send via WhatsApp</span>
-                      <ExternalLink size={14} className="opacity-70" />
-                    </button>
-                  )}
-
+                <div className="flex flex-wrap items-center justify-center gap-4 pt-6 border-t border-outline-variant/15">
                   <button
                     type="button"
-                    onClick={handleOpenEmail}
-                    className="w-full bg-on-background hover:bg-tertiary text-background hover:text-on-tertiary font-body text-[14px] font-semibold tracking-[0.05em] px-6 py-4 rounded-sm flex items-center justify-center gap-2.5 transition-all cursor-pointer"
+                    onClick={handleResetForm}
+                    className="px-6 py-3 bg-surface-container hover:bg-surface-container-high border border-outline-variant/30 text-on-surface font-body text-[14px] font-semibold rounded-sm transition-colors cursor-pointer"
                   >
-                    <Mail size={18} />
-                    <span>Send via Email</span>
-                    <ExternalLink size={14} className="opacity-70" />
+                    Submit Another Inquiry
                   </button>
-                </div>
-
-                {/* Status Notice when External App Opened */}
-                {hasOpenedExternal && (
-                  <div className="p-4 bg-surface-container border border-outline-variant/30 rounded-sm text-center space-y-1">
-                    <p className="font-body text-[14px] font-medium text-tertiary">
-                      Messaging application opened!
-                    </p>
-                    <p className="font-body text-[13px] text-on-surface-variant">
-                      Please ensure you hit "Send" in WhatsApp or Email so our studio receives your message. We usually respond within a few hours.
-                    </p>
-                  </div>
-                )}
-
-                {/* Compiled Message Preview Box with Copy Action */}
-                <div className="space-y-3 pt-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-body text-[12px] font-bold tracking-[0.1em] uppercase text-on-surface-variant">
-                      Formatted Message Preview
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleCopyMessage}
-                      className="inline-flex items-center gap-1.5 text-xs text-tertiary hover:underline font-semibold cursor-pointer"
-                    >
-                      {copied ? (
-                        <>
-                          <Check size={14} /> Copied to Clipboard
-                        </>
-                      ) : (
-                        <>
-                          <Copy size={14} /> Copy Full Text
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  <div className="bg-surface-container-lowest border border-outline-variant/20 p-5 rounded-sm font-mono text-[13px] text-on-surface-variant/90 whitespace-pre-wrap leading-relaxed max-h-60 overflow-y-auto">
-                    {generateInquiryMessage()}
-                  </div>
-                </div>
-
-                {/* Back / Reset Controls */}
-                <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-outline-variant/15">
-                  <button
-                    type="button"
-                    onClick={() => setIsPrepared(false)}
-                    className="inline-flex items-center gap-2 text-sm font-semibold text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+                  <Link
+                    to="/"
+                    className="px-6 py-3 bg-on-background text-background hover:bg-tertiary hover:text-on-tertiary font-body text-[14px] font-semibold rounded-sm transition-colors cursor-pointer"
                   >
-                    <ArrowLeft size={16} /> Modify Inquiry Details
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsPrepared(false);
-                      setHasOpenedExternal(false);
-                      setFormData({
-                        name: '', mobile: '', whatsapp: '', email: '',
-                        eventType: '', eventDate: '', location: '', services: '',
-                        editingType: '', numPhotos: '', deliveryDate: '', reference: '',
-                        course: '', experience: '', batch: '', modePreference: '',
-                        message: '', budget: '',
-                      });
-                    }}
-                    className="text-xs text-on-surface-variant hover:text-tertiary transition-colors cursor-pointer"
-                  >
-                    Start New Inquiry
-                  </button>
+                    Back to Home
+                  </Link>
                 </div>
               </div>
             ) : (
-              /* Editable Form */
+              /* Direct Inquiry Form */
               <div>
                 <div className="flex flex-wrap gap-2 mb-10">
                   {tabs.map(tab => (
@@ -491,14 +341,31 @@ export default function Contact() {
                   ))}
                 </div>
 
+                {/* Error Alerts */}
+                {submitError && (
+                  <div className="mb-6 p-4 bg-error/15 border border-error/30 rounded-sm flex items-start justify-between gap-3 text-error text-xs">
+                    <div className="flex items-start gap-2.5">
+                      <AlertCircle size={18} className="shrink-0 mt-0.5" />
+                      <span>{submitError}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSubmitError(null)}
+                      className="text-xs underline font-semibold hover:opacity-80 shrink-0 cursor-pointer"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                )}
+
                 {errors.general && (
-                  <div className="mb-8 p-4 bg-error/15 border border-error/30 rounded-sm flex items-start gap-3 text-error text-xs">
+                  <div className="mb-6 p-4 bg-error/15 border border-error/30 rounded-sm flex items-start gap-3 text-error text-xs">
                     <AlertCircle size={18} className="shrink-0 mt-0.5" />
                     <span>{errors.general}</span>
                   </div>
                 )}
 
-                <form onSubmit={handlePrepareInquiry} className="space-y-8" noValidate>
+                <form onSubmit={handleSubmitInquiry} className="space-y-8" noValidate>
                   {/* Anti-spam Honeypot field (hidden from humans, filled by bots) */}
                   <input
                     type="text"
@@ -510,6 +377,7 @@ export default function Contact() {
                     autoComplete="off"
                     aria-hidden="true"
                   />
+
                   {/* Base Client Information */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-8">
                     <div>
@@ -711,31 +579,44 @@ export default function Contact() {
 
                   {/* Client Message */}
                   <div>
-                    <label htmlFor="contact-message" className={labelClass}>Inquiry Details / Message</label>
+                    <label htmlFor="contact-message" className={labelClass}>Inquiry Details / Message *</label>
                     <textarea
                       id="contact-message"
                       name="message"
                       rows={4}
+                      required
                       value={formData.message}
                       onChange={handleChange}
-                      placeholder="Share any special vision, schedule details, or requirements..."
-                      className={inputClass()}
+                      placeholder="Share your event schedule, special vision, or specific requirements..."
+                      className={inputClass(Boolean(errors.message))}
                     />
+                    {errors.message && <p className="text-error text-xs mt-1.5">{errors.message}</p>}
                   </div>
 
+                  {/* Direct One-Click Submission Button */}
                   <button
                     type="submit"
-                    className="w-full bg-on-background text-background font-body text-[14px] font-semibold tracking-[0.05em] px-6 py-4 btn-cinematic hover:bg-tertiary hover:text-on-tertiary rounded-sm flex justify-center items-center gap-3 transition-colors cursor-pointer"
+                    disabled={dbSubmitting}
+                    className="w-full bg-on-background text-background font-body text-[14px] font-semibold tracking-[0.05em] px-6 py-4 btn-cinematic hover:bg-tertiary hover:text-on-tertiary rounded-sm flex justify-center items-center gap-3 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
                   >
-                    <span>Proceed to Send Inquiry</span>
-                    <ArrowRight size={18} />
+                    {dbSubmitting ? (
+                      <>
+                        <Loader2 size={18} className="animate-spin" />
+                        <span>Submitting Inquiry...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Submit Inquiry</span>
+                        <ArrowRight size={18} />
+                      </>
+                    )}
                   </button>
                 </form>
               </div>
             )}
           </div>
 
-          {/* Contact Info Sidebar */}
+          {/* Contact Info Sidebar (WhatsApp, Email & Studio Details Preserved) */}
           <div className="lg:col-span-5 space-y-8">
             <div className="bg-surface-container-low p-8 md:p-10 border border-outline-variant/10 rounded-sm">
               <h3 className="font-display text-[24px] text-on-surface mb-8 leading-tight">Studio Information</h3>
@@ -752,7 +633,7 @@ export default function Contact() {
                 {isWhatsAppConfigured && (
                   <li>
                     <a
-                      href={`https://wa.me/${businessWhatsAppClean}?text=Hi`}
+                      href={`https://wa.me/${businessWhatsAppClean}?text=${encodeURIComponent("Hi Apoorv Patel Photography, I would like to inquire about your services.")}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center gap-4 text-on-surface-variant hover:text-tertiary transition-colors"

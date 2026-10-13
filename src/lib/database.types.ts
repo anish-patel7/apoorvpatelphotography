@@ -211,6 +211,7 @@ export interface Database {
           customer_name: string;
           email: string;
           phone: string;
+          whatsapp?: string | null;
           event_type: string | null;
           event_date: string | null;
           event_location: string | null;
@@ -227,6 +228,7 @@ export interface Database {
           customer_name: string;
           email: string;
           phone?: string;
+          whatsapp?: string | null;
           event_type?: string | null;
           event_date?: string | null;
           event_location?: string | null;
