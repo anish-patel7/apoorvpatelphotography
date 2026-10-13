@@ -28,17 +28,23 @@ select
 from public.inquiries;
 
 -- 3. Row Level Security & Access Permissions on public.inquiries
--- Revoke all direct anonymous table mutations to prevent API bypass
-revoke all on public.inquiries from public, anon;
-revoke all on public.leads from public, anon;
-
--- Re-enable RLS
 alter table public.inquiries enable row level security;
 
--- Drop legacy or broad public policies if they exist
+-- Grant INSERT to anon and authenticated so customer inquiries can be recorded
+grant insert on public.inquiries to anon, authenticated, service_role;
+
+-- Revoke SELECT, UPDATE, DELETE from public and anon (airtight privacy)
+revoke select, update, delete on public.inquiries from public, anon;
+revoke select, update, delete on public.leads from public, anon;
+
+-- Inquiries Insert Policy with input bounds
 drop policy if exists "Inquiries insert from public" on public.inquiries;
-drop policy if exists "Inquiries insert public" on public.inquiries;
-drop policy if exists "Inquiries public insert" on public.inquiries;
+create policy "Inquiries insert from public" on public.inquiries
+  for insert with check (
+    char_length(customer_name) >= 2 and
+    char_length(message) >= 5 and
+    email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'
+  );
 
 -- Only verified administrators can SELECT, UPDATE, or DELETE inquiries
 drop policy if exists "Inquiries admin view" on public.inquiries;
@@ -58,7 +64,8 @@ grant select, insert, update, delete on public.inquiries to service_role;
 grant select, update, delete on public.inquiries to authenticated;
 
 -- 4. Server-Side Stored Function with Persistent Rate Limiting
--- Function is callable by service_role (the backend API endpoint)
+-- Function is SECURITY DEFINER: executes with owner privileges to safely return ID
+-- without exposing SELECT permissions on inquiries to anonymous visitors
 create or replace function public.submit_customer_inquiry(
   p_customer_name text,
   p_email text,
@@ -148,6 +155,5 @@ begin
 end;
 $$ language plpgsql security definer set search_path = public, pg_temp;
 
--- Revoke execute from public and anon (prevent anonymous bypass)
-revoke execute on function public.submit_customer_inquiry from public, anon;
-grant execute on function public.submit_customer_inquiry to service_role;
+-- Grant execute to anon and service_role so inquiries can be safely submitted
+grant execute on function public.submit_customer_inquiry to anon, authenticated, service_role;

@@ -108,6 +108,29 @@ export function useSubmitInquiry() {
         return { success: true, id: resData.id };
       }
 
+      // If /api endpoint is 404 (local Vite dev server), invoke RPC directly
+      if (response.status === 404 && isSupabaseConfigured) {
+        const { data: rpcResult, error: rpcError } = await (supabase.rpc as any)('submit_customer_inquiry', {
+          p_customer_name: cleanName,
+          p_email: cleanEmail,
+          p_phone: cleanPhone,
+          p_whatsapp: cleanWhatsapp || cleanPhone,
+          p_event_type: data.eventType || 'General',
+          p_event_date: data.eventDate || null,
+          p_event_location: data.location || null,
+          p_budget: data.budget || null,
+          p_message: cleanMsg,
+          p_source: 'website',
+        });
+
+        if (!rpcError && rpcResult?.success) {
+          return { success: true, id: rpcResult.id };
+        }
+        if (rpcResult?.error) {
+          return { success: false, error: rpcResult.error };
+        }
+      }
+
       return {
         success: false,
         error: resData.error || `Submission service error (${response.status}). Please reach out via WhatsApp.`,

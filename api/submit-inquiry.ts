@@ -134,7 +134,7 @@ export default async function handler(req: any, res: any) {
     }
 
     // Direct insert into PostgreSQL inquiries table
-    const { data: inserted, error: insertError } = await supabase
+    const { error: insertError } = await supabase
       .from('inquiries')
       .insert([
         {
@@ -150,20 +150,19 @@ export default async function handler(req: any, res: any) {
           inquiry_status: 'new',
           source: 'website',
         },
-      ])
-      .select('id')
-      .single();
+      ]);
 
     if (insertError) {
+      console.error('[Inquiries API] Insert error:', insertError.message);
       return res.status(500).json({
         success: false,
-        error: 'Unable to record your inquiry. Please try again or reach out via WhatsApp.',
+        error: insertError.message || 'Unable to record your inquiry. Please try again or reach out via WhatsApp.',
       });
     }
 
     return res.status(200).json({
       success: true,
-      id: inserted?.id || `APP-${Date.now().toString().slice(-6)}`,
+      id: `APP-${Date.now().toString().slice(-6)}`,
     });
   } catch {
     return res.status(500).json({
