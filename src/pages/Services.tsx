@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Heart,
   Sparkles,
@@ -15,6 +15,8 @@ import {
   Palette,
   Clapperboard,
   Wand2,
+  Layers,
+  Brush,
   CheckCircle,
   type LucideIcon,
 } from 'lucide-react';
@@ -37,12 +39,16 @@ const iconMap: Record<string, LucideIcon> = {
   Clapperboard,
   Wand: Wand2,
   Wand2,
+  Layers,
+  Brush,
 };
 
 const serviceCategories = [
   { id: 'photography', label: 'Photography', icon: Camera },
   { id: 'videography', label: 'Videography', icon: Video },
-  { id: 'editing', label: 'Editing', icon: Palette },
+  { id: 'multimedia', label: 'Multimedia Design', icon: Film },
+  { id: 'design', label: 'Graphic Design', icon: Palette },
+  { id: 'editing', label: 'Editing', icon: Clapperboard },
 ];
 
 const servicesBreadcrumbs = {
@@ -55,14 +61,29 @@ const servicesBreadcrumbs = {
 };
 
 export default function Services() {
-  const [activeTab, setActiveTab] = useState<string>('photography');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const initialTab = serviceCategories.some(c => c.id === requestedTab) ? (requestedTab as string) : 'photography';
+
+  const [activeTab, setActiveTab] = useState<string>(initialTab);
   const { services, loading } = useServices(activeTab);
+
+  useEffect(() => {
+    if (requestedTab && serviceCategories.some(c => c.id === requestedTab)) {
+      setActiveTab(requestedTab);
+    }
+  }, [requestedTab]);
+
+  const handleTabChange = (tabId: string) => {
+    setActiveTab(tabId);
+    setSearchParams({ tab: tabId }, { replace: true });
+  };
 
   return (
     <main className="pt-[104px]">
       <SEO
-        title="Photography & Videography Services | Weddings, Events & Films — Apoorv Patel"
-        description="Comprehensive photography, cinematic videography, and post-production retouching services tailored for weddings, couples, events, and commercial projects in IND & UK."
+        title="Photography, Multimedia & Graphic Design Services | Apoorv Patel"
+        description="Comprehensive wedding photography, cinematic videography, multimedia design, graphic design, and post-production creative services based in the United Kingdom."
         canonicalPath="/services"
         image="/images/real_work_dzvz4ssjoss.jpg"
         schema={servicesBreadcrumbs}
@@ -74,24 +95,24 @@ export default function Services() {
             Our Services
           </h1>
           <p className="font-body text-[18px] text-on-surface-variant max-w-2xl mx-auto leading-relaxed">
-            From capturing your precious moments to transforming them into timeless art — we offer comprehensive creative services.
+            From capturing your timeless moments to designing bespoke digital graphics and cinematic visuals — we offer full-spectrum creative services based in the UK.
           </p>
         </div>
 
-        <div className="flex justify-center gap-4 mb-16 flex-wrap">
+        <div className="flex justify-center gap-3 mb-16 flex-wrap">
           {serviceCategories.map(cat => {
             const CatIcon = cat.icon;
             return (
               <button
                 key={cat.id}
-                onClick={() => setActiveTab(cat.id)}
-                className={`flex items-center gap-2 px-6 py-3 rounded-sm font-body text-[14px] font-semibold tracking-[0.05em] transition-all cursor-pointer ${
+                onClick={() => handleTabChange(cat.id)}
+                className={`flex items-center gap-2 px-5 py-3 rounded-sm font-body text-[14px] font-semibold tracking-[0.05em] transition-all cursor-pointer ${
                   activeTab === cat.id
-                    ? 'bg-tertiary text-background border-b-2 border-tertiary'
+                    ? 'bg-tertiary text-on-tertiary border-b-2 border-tertiary shadow-sm'
                     : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
                 }`}
               >
-                <CatIcon className="w-5 h-5" />
+                <CatIcon className="w-4 h-4" />
                 {cat.label}
               </button>
             );
@@ -106,7 +127,7 @@ export default function Services() {
           </div>
         ) : services.length === 0 ? (
           <div className="text-center py-20">
-            <p className="text-on-surface-variant text-lg">No services available for this category.</p>
+            <p className="text-on-surface-variant text-lg">No services currently listed for this category.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -115,33 +136,36 @@ export default function Services() {
               return (
                 <div
                   key={service.id}
-                  className="group bg-surface-container-low rounded-sm p-8 border border-outline-variant/10 hover:bg-surface-container transition-colors duration-300"
+                  id={service.slug || service.id}
+                  className="group bg-surface-container-low rounded-sm p-8 border border-outline-variant/10 hover:bg-surface-container transition-colors duration-300 flex flex-col justify-between"
                 >
-                  <IconComp className="w-10 h-10 text-tertiary mb-4" strokeWidth={1.5} />
-                  <h3 className="font-display text-[24px] text-on-surface mb-3 leading-tight">
-                    {service.title}
-                  </h3>
-                  <p className="font-body text-[16px] text-on-surface-variant leading-relaxed mb-6">{service.description}</p>
-                  {service.features && service.features.length > 0 && (
-                    <ul className="space-y-2 mb-6">
-                      {service.features.map((f: string) => (
-                        <li key={f} className="flex items-center gap-2 font-body text-[14px] text-on-surface-variant">
-                          <CheckCircle className="w-4 h-4 text-tertiary flex-shrink-0" />
-                          {f}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                  <div>
+                    <IconComp className="w-10 h-10 text-tertiary mb-4" strokeWidth={1.5} />
+                    <h3 className="font-display text-[24px] text-on-surface mb-3 leading-tight">
+                      {service.title}
+                    </h3>
+                    <p className="font-body text-[16px] text-on-surface-variant leading-relaxed mb-6">{service.description}</p>
+                    {service.features && service.features.length > 0 && (
+                      <ul className="space-y-2 mb-6">
+                        {service.features.map((f: string) => (
+                          <li key={f} className="flex items-center gap-2 font-body text-[14px] text-on-surface-variant">
+                            <CheckCircle className="w-4 h-4 text-tertiary flex-shrink-0" />
+                            {f}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                   <Link
-                    to="/contact"
-                  className="inline-flex items-center gap-2 text-tertiary font-body text-[14px] font-semibold hover:text-tertiary/80 transition-all"
-                >
-                  Inquire Now
-                  <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
-                </Link>
-              </div>
-            );
-          })}
+                    to={`/contact?service=${encodeURIComponent(service.title)}`}
+                    className="inline-flex items-center gap-2 text-tertiary font-body text-[14px] font-semibold hover:text-tertiary/80 transition-all pt-2"
+                  >
+                    Inquire Now
+                    <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+                  </Link>
+                </div>
+              );
+            })}
           </div>
         )}
       </section>

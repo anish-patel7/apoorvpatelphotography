@@ -1,27 +1,43 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      (function() {
+        try {
+          var stored = localStorage.getItem('theme');
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if (stored === 'dark' || (!stored && prefersDark)) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        } catch (e) {
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
     <link rel="icon" type="image/webp" href="/images/logo.webp" />
     <link rel="alternate icon" href="/images/logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Apoorv Patel Photography | Luxury Wedding & Portrait Photographer — IND & UK</title>
-    <meta name="description" content="Award-winning wedding and portrait photography by Apoorv Patel. Specializing in luxury weddings, candid moments, and cinematic films across India and the UK." />
+    <title>Apoorv Patel Photography | UK Wedding Photography & Creative Design</title>
+    <meta name="description" content="Explore wedding photography, cinematic videography, multimedia design and graphic design by Apoorv Patel Photography, a UK-based creative business." />
+    <meta name="keywords" content="UK Wedding Photography, UK Pre-Wedding Photography, Wedding Videography, Multimedia Design, Graphic Design, Creative Design Services, Apoorv Patel" />
     <meta name="robots" content="index, follow" />
     <link rel="canonical" href="https://www.apoorvpatelphotography.com/" />
     
     <!-- Open Graph / Social Sharing -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Apoorv Patel Photography" />
-    <meta property="og:title" content="Apoorv Patel Photography | Luxury Wedding & Portrait Photographer — IND & UK" />
-    <meta property="og:description" content="Award-winning wedding and portrait photography by Apoorv Patel. Specializing in luxury weddings, candid moments, and cinematic films across India and the UK." />
+    <meta property="og:title" content="Apoorv Patel Photography | UK Wedding Photography & Creative Design" />
+    <meta property="og:description" content="Explore wedding photography, cinematic videography, multimedia design and graphic design by Apoorv Patel Photography, a UK-based creative business." />
     <meta property="og:image" content="https://www.apoorvpatelphotography.com/images/logo.png" />
     <meta property="og:url" content="https://www.apoorvpatelphotography.com/" />
 
     <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Apoorv Patel Photography | Luxury Wedding & Portrait Photographer — IND & UK" />
-    <meta name="twitter:description" content="Award-winning wedding and portrait photography by Apoorv Patel. Specializing in luxury weddings, candid moments, and cinematic films across India and the UK." />
+    <meta name="twitter:title" content="Apoorv Patel Photography | UK Wedding Photography & Creative Design" />
+    <meta name="twitter:description" content="Explore wedding photography, cinematic videography, multimedia design and graphic design by Apoorv Patel Photography, a UK-based creative business." />
     <meta name="twitter:image" content="https://www.apoorvpatelphotography.com/images/logo.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

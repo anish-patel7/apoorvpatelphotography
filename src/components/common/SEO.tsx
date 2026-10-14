@@ -11,8 +11,8 @@ export interface SEOProps {
   noindex?: boolean;
 }
 
-const DEFAULT_TITLE = 'Apoorv Patel Photography | Luxury Wedding & Portrait Photographer — IND & UK';
-const DEFAULT_DESCRIPTION = 'Professional Photography, Videography, Editing & Training — IND | UK. Inspired by Innovation.';
+const DEFAULT_TITLE = 'Apoorv Patel Photography | UK Wedding Photography & Creative Design';
+const DEFAULT_DESCRIPTION = 'Explore wedding photography, cinematic videography, multimedia design and graphic design by Apoorv Patel Photography, a UK-based creative business.';
 const DEFAULT_IMAGE = '/images/logo.png';
 const SITE_NAME = 'Apoorv Patel Photography';
 

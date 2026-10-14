@@ -2,8 +2,9 @@ import { useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, FolderOpen, Briefcase,
-  GraduationCap, MessageSquareQuote, LogOut, Menu, X, ChevronRight, Film,
+  GraduationCap, MessageSquareQuote, LogOut, Menu, X, ChevronRight, Film, Sun, Moon,
 } from 'lucide-react';
+import { useTheme } from '../../context/ThemeContext';
 
 const sidebarItems = [
   { to: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
@@ -22,6 +23,7 @@ interface Props {
 
 export default function AdminLayout({ children, onLogout }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { isDark, toggleTheme } = useTheme();
   const location = useLocation();
 
   const basePath = location.pathname.startsWith('/admin/preview') ? '/admin/preview' : '/admin';
@@ -122,7 +124,15 @@ export default function AdminLayout({ children, onLogout }: Props) {
             </h1>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              onClick={toggleTheme}
+              className="p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors cursor-pointer border border-outline-variant/30"
+              aria-label="Toggle theme"
+              title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {isDark ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
             <Link
               to="/"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-tertiary hover:bg-tertiary/10 transition-colors border border-tertiary/30"

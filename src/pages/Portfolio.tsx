@@ -11,10 +11,11 @@ const portfolioCategories = [
   'Engagement',
   'Pre-Wedding',
   'Baby Shower',
-  'Maternity',
   'Family',
   'Personal',
   'Videography',
+  'Multimedia Design',
+  'Graphic Design',
   'Photo Editing',
   'Video Editing',
 ] as const;
@@ -55,8 +56,8 @@ export default function Portfolio() {
   return (
     <main className="flex-grow pt-[120px]">
       <SEO
-        title="Photography Portfolio | Weddings, Pre-Weddings & Portraits — Apoorv Patel"
-        description="Explore authentic wedding ceremonies, pre-wedding shoots, engagements, and portraits captured with artistic composition and cinematic depth across India and the UK."
+        title="Portfolio | UK Wedding Photography & Creative Design — Apoorv Patel"
+        description="Explore authentic wedding ceremonies, pre-wedding shoots, cinematic videography, multimedia design, and graphic design by Apoorv Patel Photography in the United Kingdom."
         canonicalPath="/portfolio"
         image="/images/real_work_dzvz4ssjoss.jpg"
         schema={portfolioBreadcrumbs}

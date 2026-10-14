@@ -16,15 +16,15 @@ const statusOptions: LeadStatus[] = [
 ];
 
 const statusColors: Record<string, string> = {
-  new: 'bg-blue-500/15 text-blue-300 border border-blue-500/30',
-  contacted: 'bg-amber-500/15 text-amber-300 border border-amber-500/30',
-  requirement_confirmed: 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30',
-  quotation_sent: 'bg-purple-500/15 text-purple-300 border border-purple-500/30',
-  follow_up: 'bg-orange-500/15 text-orange-300 border border-orange-500/30',
-  confirmed: 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30',
+  new: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30',
+  contacted: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30',
+  requirement_confirmed: 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30',
+  quotation_sent: 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30',
+  follow_up: 'bg-orange-500/15 text-orange-700 dark:text-orange-300 border border-orange-500/30',
+  confirmed: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30',
   completed: 'bg-tertiary/15 text-tertiary border border-tertiary/30',
-  lost: 'bg-rose-500/15 text-rose-300 border border-rose-500/30',
-  cancelled: 'bg-neutral-500/15 text-neutral-300 border border-neutral-500/30',
+  lost: 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30',
+  cancelled: 'bg-neutral-500/15 text-neutral-700 dark:text-neutral-300 border border-neutral-500/30',
 };
 
 export default function AdminLeads() {

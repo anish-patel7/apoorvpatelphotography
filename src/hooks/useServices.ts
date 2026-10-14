@@ -5,7 +5,7 @@ export interface Service {
   id: string;
   title: string;
   slug?: string;
-  category: 'photography' | 'videography' | 'editing';
+  category: 'photography' | 'videography' | 'editing' | 'multimedia' | 'design';
   description: string;
   icon: string;
   features: string[];
@@ -23,6 +23,7 @@ const fallbackServices: Service[] = defaultServices.map((s, idx) => ({
   description: s.description,
   icon: s.icon,
   features: s.features,
+  is_active: true,
   sort_order: idx + 1,
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
@@ -35,7 +36,7 @@ export function useServices(category?: string) {
   const fetch = useCallback(async () => {
     setLoading(true);
     if (!isSupabaseConfigured) {
-      let filtered = fallbackServices;
+      let filtered = fallbackServices.filter(s => s.is_active !== false);
       if (category) {
         filtered = filtered.filter(s => s.category.toLowerCase() === category.toLowerCase());
       }
@@ -48,6 +49,7 @@ export function useServices(category?: string) {
       let query = supabase
         .from('services')
         .select('*')
+        .eq('is_active', true)
         .order('sort_order');
 
       if (category) {

@@ -31,9 +31,9 @@ export default function AboutPreview() {
               <span className="text-brand-saffron">Creating Memories</span>
             </h2>
             <p className="text-white/60 leading-relaxed mb-6">
-              Apoorvpatel Photography is a professional creative studio specializing in photography,
-              videography, editing, and training. With a presence in India and the United Kingdom,
-              we bring a unique blend of cultural richness and modern creativity to every project.
+              Apoorv Patel Photography is a UK-based creative studio specializing in photography,
+              cinematic videography, multimedia design, and graphic design. Based in the United Kingdom,
+              we bring a blend of visual artistry and modern creativity to every project.
             </p>
             <p className="text-white/60 leading-relaxed mb-8">
               Our philosophy is simple — every moment tells a story, and we're here to tell it beautifully.
@@ -44,9 +44,9 @@ export default function AboutPreview() {
             <div className="grid grid-cols-2 gap-6 mb-8">
               {[
                 { label: 'Photography', desc: 'Weddings, Events & Portraits' },
-                { label: 'Videography', desc: 'Cinematic Films & Reels' },
-                { label: 'Editing', desc: 'Photo & Video Post-Production' },
-                { label: 'Training', desc: 'Learn Photography & Editing' },
+                { label: 'Videography', desc: 'Cinematic Films & Visuals' },
+                { label: 'Multimedia Design', desc: 'Motion Graphics & Content' },
+                { label: 'Graphic Design', desc: 'Branding & Visual Identity' },
               ].map(item => (
                 <div key={item.label} className="border-l-2 border-brand-saffron pl-4">
                   <h4 className="font-semibold text-sm mb-0.5">{item.label}</h4>

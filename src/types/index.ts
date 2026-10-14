@@ -24,13 +24,17 @@ export interface PortfolioProject {
   location: string;
   featured: boolean;
   isRealWork?: boolean;
+  video_width?: number;
+  video_height?: number;
+  aspect_ratio?: number;
+  orientation?: 'portrait' | 'landscape' | 'square';
 }
 
 export interface Service {
   id: string;
   title: string;
   slug?: string;
-  category: 'photography' | 'videography' | 'editing';
+  category: 'photography' | 'videography' | 'editing' | 'multimedia' | 'design';
   description: string;
   icon: string;
   features: string[];
@@ -59,18 +63,21 @@ export interface TrainingCourse {
 
 export interface Testimonial {
   id: string;
-  name: string;
   client_name?: string;
+  name?: string;
   client_location?: string;
-  review: string;
   testimonial?: string;
-  service: string;
-  date: string;
-  rating: number;
-  approved?: boolean;
+  review?: string;
+  service?: string;
+  date?: string;
+  rating?: number;
+  image_url?: string | null;
   is_approved?: boolean;
+  approved?: boolean;
   is_featured?: boolean;
-  image_url?: string;
+  display_order?: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface InstagramReel {
@@ -83,7 +90,15 @@ export interface InstagramReel {
   featured: boolean;
   is_featured?: boolean;
   is_published?: boolean;
+  display_order?: number;
+  content_type?: 'post' | 'reel' | 'carousel' | 'photo';
   status?: 'configured' | 'incomplete';
+  video_width?: number;
+  video_height?: number;
+  aspect_ratio?: number;
+  orientation?: 'portrait' | 'landscape' | 'square';
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Lead {

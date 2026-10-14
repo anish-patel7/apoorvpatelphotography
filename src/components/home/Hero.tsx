@@ -38,13 +38,13 @@ export default function Hero() {
         <div className="flex flex-col sm:flex-row gap-6 mt-8">
           <Link
             to="/portfolio"
-            className="bg-white text-black font-body text-[14px] font-semibold tracking-[0.05em] px-8 py-4 rounded-full btn-cinematic hover:bg-tertiary-fixed border border-white"
+            className="bg-on-background text-background font-body text-[14px] font-semibold tracking-[0.05em] px-8 py-4 rounded-full btn-cinematic hover:bg-tertiary hover:text-on-tertiary border border-on-background transition-colors"
           >
             View Portfolio
           </Link>
           <Link
             to="/contact"
-            className="bg-transparent text-white font-body text-[14px] font-semibold tracking-[0.05em] px-8 py-4 rounded-full btn-cinematic border border-white hover:bg-white hover:text-black"
+            className="bg-transparent text-on-background font-body text-[14px] font-semibold tracking-[0.05em] px-8 py-4 rounded-full btn-cinematic border border-on-background hover:bg-on-background hover:text-background transition-colors"
           >
             Get a Quote
           </Link>

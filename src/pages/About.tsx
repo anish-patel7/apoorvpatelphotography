@@ -14,8 +14,8 @@ export default function About() {
   return (
     <main className="pt-[104px]">
       <SEO
-        title="About Apoorv Patel | Inspired by Innovation — Photography Studio IND & UK"
-        description="Meet Apoorv Patel, founder of Apoorv Patel Photography. Dedicated to capturing heartfelt weddings, human connection, and timeless imagery across India and the United Kingdom."
+        title="About Apoorv Patel | UK-Based Photography & Creative Design"
+        description="Meet Apoorv Patel, founder of Apoorv Patel Photography. A UK-based creative studio specializing in luxury wedding photography, cinematic videography, multimedia design, and graphic design."
         canonicalPath="/about"
         image="/images/logo.png"
         schema={aboutBreadcrumbs}
@@ -33,26 +33,23 @@ export default function About() {
               "inspired by innovation"
             </p>
             <p className="font-body text-[16px] text-on-surface-variant leading-relaxed mb-6">
-              Apoorvpatel Photography is a professional creative studio offering photography,
-              videography, photo/video editing, Instagram/Reel content creation, and
-              photography/video editing training.
+              Apoorv Patel Photography is a UK-based creative studio offering luxury wedding
+              and portrait photography, cinematic videography, multimedia design, graphic design,
+              and post-production creative services.
             </p>
             <p className="font-body text-[16px] text-on-surface-variant leading-relaxed mb-6">
-              With a presence in both India and the United Kingdom, we bring a unique blend of
-              cultural richness and modern creativity to every project. Our philosophy is rooted
-              in the belief that every moment deserves to be captured with artistry, care, and
-              an innovative approach.
+              Based in the United Kingdom, we bring an innovative approach and contemporary
+              visual aesthetics to every project. Our philosophy is rooted in the belief that every
+              story deserves to be captured with artistry, precision, and heartfelt emotion.
             </p>
             <p className="font-body text-[16px] text-on-surface-variant leading-relaxed mb-8">
               Whether it's a grand wedding celebration, an intimate portrait session, a cinematic
-              film, professional editing, or helping aspiring photographers learn the craft — we
-              pour our heart and passion into every project.
+              visual film, dynamic multimedia content, or brand graphic design — we pour our heart
+              and passion into every frame.
             </p>
 
             <div className="flex items-center gap-2 text-on-surface-variant text-sm mb-6">
               <span className="material-symbols-outlined text-tertiary text-[16px]">location_on</span>
-              <span>India</span>
-              <span className="mx-1">|</span>
               <span>United Kingdom</span>
             </div>
           </div>
@@ -90,15 +87,17 @@ export default function About() {
           <div className="text-center mb-16">
             <h2 className="font-display text-[32px] md:text-[48px] text-on-background mb-4 leading-tight">What We Do</h2>
             <p className="font-body text-[16px] text-on-surface-variant max-w-xl mx-auto leading-relaxed">
-              A full suite of creative services to capture, create, and teach.
+              A comprehensive suite of photography and creative design solutions.
             </p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
             {[
-              { icon: 'camera', title: 'Photography', desc: 'Weddings, events, portraits, couple, family, maternity, and personal photography across India and the UK.' },
-              { icon: 'videocam', title: 'Videography', desc: 'Cinematic wedding films, event coverage, highlight reels, social media videos, and Instagram Reels.' },
-              { icon: 'edit', title: 'Editing', desc: 'Photo retouching, color correction, album design, video editing, reel editing, and creative editing.' },
-              { icon: 'school', title: 'Training', desc: 'Comprehensive courses in photography, videography, photo editing, and video editing for all levels.' },
+              { icon: 'camera', title: 'Photography', desc: 'Weddings, celebrations, portraits, couple, family, and personal photography crafted with artistic vision.' },
+              { icon: 'videocam', title: 'Videography', desc: 'Cinematic wedding films, event highlights, social media reels, and high-impact visual storytelling.' },
+              { icon: 'movie_filter', title: 'Multimedia Design', desc: 'Creative multimedia solutions including video editing, motion graphics, digital content creation and visual storytelling.' },
+              { icon: 'palette', title: 'Graphic Design', desc: 'Professional graphic design for branding, promotional materials, social media creatives and digital visual communication.' },
+              { icon: 'edit', title: 'Post-Production', desc: 'High-end photo retouching, color grading, album curation, and creative digital finishing.' },
+              { icon: 'school', title: 'Training & Mentorship', desc: 'Specialized courses in photography techniques, cinematic videography, and post-production workflows.' },
             ].map(item => (
               <div key={item.title} className="text-center p-8 rounded-sm border border-outline-variant/10 hover:bg-surface-container transition-colors duration-500">
                 <span className="material-symbols-outlined text-[40px] text-tertiary mb-4 block" style={{ fontVariationSettings: "'wght' 200" }}>{item.icon}</span>

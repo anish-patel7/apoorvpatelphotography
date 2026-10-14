@@ -1,6 +1,7 @@
 /**
  * Instagram URL Parsing & Embedding Utilities
- * Supports public posts (/p/), reels (/reel/ or /reels/), and IGTV (/tv/).
+ * Supports public posts (/p/), reels (/reel/ or /reels/), IGTV (/tv/),
+ * mobile share links (/share/reel/ or /share/p/), m.instagram.com, and instagr.am.
  * Cleans tracking parameters and builds standard public embed URLs.
  */
 
@@ -15,24 +16,26 @@ export interface ParsedInstagramInfo {
   rawUrl: string;
 }
 
+const INSTAGRAM_REGEX = /(?:https?:\/\/)?(?:[a-zA-Z0-9-]+\.)?(?:instagram\.com|instagr\.am)\/(?:(?:share\/)?(?:reel|reels|p|tv))\/(?:[^\/]*\/)?([A-Za-z0-9_-]+)/i;
+const FALLBACK_PATTERN = /(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/i;
+
 /**
  * Validates whether a given string is a valid Instagram post/reel/tv URL.
  */
 export function isValidInstagramUrl(url: string): boolean {
   if (!url || typeof url !== 'string') return false;
   const trimmed = url.trim();
-  const pattern = /^(https?:\/\/)?(www\.)?instagram\.com\/(p|reel|reels|tv)\/([A-Za-z0-9_-]+)/i;
-  return pattern.test(trimmed);
+  return INSTAGRAM_REGEX.test(trimmed) || (trimmed.includes('instagram.com') && FALLBACK_PATTERN.test(trimmed));
 }
 
 /**
  * Extracts the post or reel ID from an Instagram URL.
- * Handles trailing slashes, tracking parameters, and mobile URLs.
+ * Handles trailing slashes, tracking parameters, mobile share URLs, and m.instagram.com.
  */
 export function extractInstagramId(url: string): string | null {
   if (!url || typeof url !== 'string') return null;
   const trimmed = url.trim();
-  const match = trimmed.match(/instagram\.com\/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/i);
+  const match = trimmed.match(INSTAGRAM_REGEX) || trimmed.match(FALLBACK_PATTERN);
   return match ? match[1] : null;
 }
 
@@ -42,10 +45,10 @@ export function extractInstagramId(url: string): string | null {
 export function getInstagramType(url: string): InstagramType | null {
   if (!url || typeof url !== 'string') return null;
   const trimmed = url.trim().toLowerCase();
-  if (trimmed.includes('/reel/') || trimmed.includes('/reels/')) return 'reel';
+  if (trimmed.includes('/reel/') || trimmed.includes('/reels/') || trimmed.includes('/share/reel/')) return 'reel';
   if (trimmed.includes('/tv/')) return 'tv';
-  if (trimmed.includes('/p/')) return 'post';
-  return null;
+  if (trimmed.includes('/p/') || trimmed.includes('/share/p/')) return 'post';
+  return 'reel'; // Default to reel for modern short-form video content
 }
 
 /**
@@ -85,7 +88,7 @@ export function parseInstagramUrl(url: string): ParsedInstagramInfo {
 }
 
 /**
- * Strips tracking parameters (utm_source, psln, srtk, etc.) and returns
+ * Strips tracking parameters (utm_source, igsh, etc.) and returns
  * the canonical Instagram URL, or the trimmed original if not parseable.
  */
 export function cleanInstagramUrl(url: string): string {

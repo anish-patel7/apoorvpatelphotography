@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Edit3, Trash2, Star, X, CheckCircle2, Loader2, Database } from 'lucide-react';
+import { Plus, Edit3, Trash2, Star, X, CheckCircle2, Loader2, Database, AlertCircle } from 'lucide-react';
 import { useTestimonialsAdmin } from '../../hooks/useTestimonials';
 
 export default function AdminTestimonials() {
@@ -8,6 +8,8 @@ export default function AdminTestimonials() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: '',
     review: '',
@@ -27,34 +29,44 @@ export default function AdminTestimonials() {
       rating: t.rating || 5,
       approved: t.is_approved ?? t.approved ?? true,
     });
+    setFormError(null);
     setShowForm(true);
   };
 
   const handleSave = async () => {
-    if (!form.name.trim() || !form.review.trim()) return;
+    setFormError(null);
+    if (!form.name.trim()) {
+      setFormError('Please provide a client or couple name.');
+      return;
+    }
+    if (!form.review.trim()) {
+      setFormError('Please enter the client review text.');
+      return;
+    }
 
     setSaving(true);
     try {
-      const data = {
+      const payload = {
         client_name: form.name.trim(),
-        name: form.name.trim(),
         testimonial: form.review.trim(),
-        review: form.review.trim(),
-        service: form.service.trim(),
-        date: form.date.trim(),
+        service: form.service.trim() || 'Wedding Photography',
+        date: form.date.trim() || new Date().getFullYear().toString(),
         rating: form.rating,
         is_approved: form.approved,
-        approved: form.approved,
+        display_order: editing?.display_order ?? (items.length + 1),
       };
 
       if (editing) {
-        await update(editing.id, data);
+        await update(editing.id, payload);
+        setSuccessMsg('Testimonial updated successfully.');
       } else {
-        await create(data);
+        await create(payload);
+        setSuccessMsg('Testimonial created and saved to Supabase.');
       }
+      setTimeout(() => setSuccessMsg(null), 4000);
       resetForm();
     } catch (err: any) {
-      alert(err?.message || 'Failed to save testimonial.');
+      setFormError(err?.message || 'Failed to save testimonial to database.');
     } finally {
       setSaving(false);
     }
@@ -64,6 +76,8 @@ export default function AdminTestimonials() {
     if (window.confirm('Are you sure you want to delete this review?')) {
       try {
         await remove(id);
+        setSuccessMsg('Testimonial removed.');
+        setTimeout(() => setSuccessMsg(null), 3000);
       } catch (err: any) {
         alert(err?.message || 'Delete operation failed.');
       }
@@ -73,15 +87,19 @@ export default function AdminTestimonials() {
   const toggleApproval = async (t: any) => {
     try {
       const current = t.is_approved ?? t.approved ?? false;
-      await update(t.id, { is_approved: !current, approved: !current });
+      await update(t.id, { is_approved: !current });
+      setSuccessMsg(`Testimonial ${!current ? 'approved for public display' : 'set to pending review'}.`);
+      setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err: any) {
       console.error('Toggle approval failed:', err);
+      alert(err?.message || 'Failed to update approval status.');
     }
   };
 
   const resetForm = () => {
     setShowForm(false);
     setEditing(null);
+    setFormError(null);
     setForm({ name: '', review: '', service: '', date: '2026', rating: 5, approved: true });
   };
 
@@ -89,6 +107,13 @@ export default function AdminTestimonials() {
 
   return (
     <div className="space-y-6">
+      {successMsg && (
+        <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-3 rounded-xl flex items-center gap-2.5 text-sm animate-in fade-in">
+          <CheckCircle2 size={16} className="shrink-0 text-emerald-400" />
+          <span>{successMsg}</span>
+        </div>
+      )}
+
       <div className="bg-surface-container-low border border-outline-variant/30 rounded-xl p-4 flex items-center justify-between gap-4 text-xs">
         <div className="flex items-center gap-2.5 text-on-surface-variant">
           <Database size={15} className="text-tertiary shrink-0" />
@@ -187,6 +212,12 @@ export default function AdminTestimonials() {
               </button>
             </div>
             <div className="p-6 space-y-4">
+              {formError && (
+                <div className="bg-error/10 border border-error/30 text-error px-3.5 py-2.5 rounded-lg flex items-center gap-2 text-xs">
+                  <AlertCircle size={15} className="shrink-0 text-error" />
+                  <span>{formError}</span>
+                </div>
+              )}
               <div>
                 <label className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant mb-1.5 block">Client / Couple Name *</label>
                 <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Priya & Rahul" className={inputClass} />

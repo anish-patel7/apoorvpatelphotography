@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react';
 import { ExternalLink, Image as ImageIcon, AlertCircle, RefreshCw, Play, Loader2 } from 'lucide-react';
 import InstagramIcon from '../icons/InstagramIcon';
 import { parseInstagramUrl } from '../../utils/instagram';
+import { getVideoContainerAspectClass, type VideoOrientation } from '../../utils/videoOrientation';
 
 interface InstagramEmbedProps {
   url: string;
   fallbackThumbnail?: string;
   title?: string;
-  aspectRatio?: 'square' | 'reel' | 'auto';
+  aspectRatio?: 'square' | 'reel' | 'landscape' | 'auto';
+  orientation?: VideoOrientation | null;
   autoLoad?: boolean;
   className?: string;
 }
@@ -17,32 +19,66 @@ export default function InstagramEmbed({
   fallbackThumbnail,
   title = 'Instagram Post',
   aspectRatio = 'auto',
+  orientation,
   autoLoad = false,
   className = '',
 }: InstagramEmbedProps) {
+  const isDirectVideo = Boolean(
+    url && (
+      url.match(/\.(mp4|mov|webm|ogg|m4v)($|\?)/i) ||
+      url.startsWith('blob:') ||
+      url.includes('/video/')
+    )
+  );
+
   const parsed = parseInstagramUrl(url);
-  const [embedActive, setEmbedActive] = useState<boolean>(autoLoad);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [embedActive, setEmbedActive] = useState<boolean>(autoLoad || isDirectVideo);
+  const [loading, setLoading] = useState<boolean>(!isDirectVideo);
   const [embedBlocked, setEmbedBlocked] = useState<boolean>(false);
 
   // Safety timer: Never leave a permanent loading spinner if network stalls or iframe fails to notify
   useEffect(() => {
-    if (embedActive && loading) {
+    if (embedActive && loading && !isDirectVideo) {
       const timer = setTimeout(() => {
         setLoading(false);
       }, 7000);
       return () => clearTimeout(timer);
     }
-  }, [embedActive, loading]);
+  }, [embedActive, loading, isDirectVideo]);
 
-  // Determine responsive aspect ratio class
+  // Determine effective orientation
   const detectedType = parsed.type;
   const isReel = aspectRatio === 'reel' || (aspectRatio === 'auto' && detectedType === 'reel');
-  const aspectClass = isReel
-    ? 'aspect-[9/16] w-full max-w-[340px] sm:max-w-[380px] mx-auto min-h-[480px] sm:min-h-[580px]'
-    : 'aspect-square sm:aspect-[4/5] w-full max-w-[480px] sm:max-w-[540px] mx-auto min-h-[360px] sm:min-h-[460px]';
+  const effectiveOrientation: VideoOrientation = orientation
+    ? orientation
+    : isReel
+    ? 'portrait'
+    : aspectRatio === 'landscape'
+    ? 'landscape'
+    : aspectRatio === 'square'
+    ? 'square'
+    : 'portrait';
 
-  // 1. Invalid Instagram URL state
+  const aspectClass = getVideoContainerAspectClass(effectiveOrientation);
+
+  // 1. Direct Video File Playback Mode (uploaded video files)
+  if (isDirectVideo) {
+    return (
+      <div className={`relative rounded-xl overflow-hidden border border-outline-variant/30 bg-black shadow-lg ${aspectClass} ${className}`}>
+        <video
+          src={url}
+          controls
+          playsInline
+          poster={fallbackThumbnail}
+          className="w-full h-full object-contain"
+        >
+          Your browser does not support the video tag.
+        </video>
+      </div>
+    );
+  }
+
+  // 2. Invalid Instagram URL state
   if (!parsed.isValid || !parsed.embedUrl) {
     return (
       <div className={`bg-surface-container-low border border-outline-variant/30 rounded-xl p-6 text-center space-y-4 ${className}`}>
@@ -69,7 +105,7 @@ export default function InstagramEmbed({
     );
   }
 
-  // 2. Cover Thumbnail Preview Mode (Privacy-conscious click-to-load)
+  // 3. Cover Thumbnail Preview Mode (Privacy-conscious click-to-load)
   if (!embedActive) {
     return (
       <div className={`relative rounded-xl overflow-hidden border border-outline-variant/30 bg-surface-container-low ${aspectClass} ${className}`}>

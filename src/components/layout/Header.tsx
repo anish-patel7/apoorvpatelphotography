@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useTheme } from '../../context/ThemeContext';
 
 const navLinks = [
   { to: '/', label: 'Home' },
@@ -13,58 +14,23 @@ const navLinks = [
 export default function Header() {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const [isDark, setIsDark] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('theme');
-      if (stored) return stored === 'dark';
-      return document.documentElement.classList.contains('dark');
-    }
-    return true;
-  });
+  const { isDark, toggleTheme } = useTheme();
   const location = useLocation();
 
   const rawWhatsApp = import.meta.env.VITE_WHATSAPP_NUMBER || '';
   const cleanWhatsApp = rawWhatsApp.replace(/\D/g, '');
-  const isWhatsAppValid = Boolean(cleanWhatsApp && cleanWhatsApp.length >= 8 && cleanWhatsApp.length <= 15);
-  const whatsappUrl = isWhatsAppValid
+  const whatsappUrl = cleanWhatsApp && cleanWhatsApp.length >= 7
     ? `https://wa.me/${cleanWhatsApp}?text=${encodeURIComponent("Hi, I'm interested in your photography services.")}`
     : null;
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 50);
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-
-  // Close mobile drawer on route change
-  useEffect(() => {
-    setIsOpen(false);
-  }, [location]);
-
-  // Prevent background scrolling when mobile menu is open
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 20);
     };
-  }, [isOpen]);
-
-  const toggleTheme = () => {
-    const html = document.documentElement;
-    const newIsDark = !isDark;
-    setIsDark(newIsDark);
-    if (newIsDark) {
-      html.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-    } else {
-      html.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
-    }
-  };
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const isActive = (path: string) => location.pathname === path;
 

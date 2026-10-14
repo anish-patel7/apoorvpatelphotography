@@ -74,10 +74,10 @@ export default function Footer() {
         <div className="md:col-span-3 flex flex-col gap-4 mt-8 md:mt-0">
           <span className="font-body text-[12px] font-bold tracking-[0.15em] uppercase text-on-surface mb-2">Studio</span>
           <p className="font-body text-[15px] text-on-surface-variant leading-relaxed">
-            Weddings, Portraits & Films
+            Photography, Videography & Creative Design
           </p>
           <p className="font-body text-[14px] text-on-surface-variant">
-            India &middot; United Kingdom
+            United Kingdom
           </p>
           <a
             href={`mailto:${businessEmail}`}
@@ -89,9 +89,9 @@ export default function Footer() {
 
         <div className="md:col-span-12 mt-16 pt-8 border-t border-outline-variant/10 flex justify-between items-center opacity-80">
           <span className="font-body text-[14px] sm:text-[16px] text-primary">
-            &copy; {new Date().getFullYear()} Apoorvpatel Photography. All rights reserved.
+            &copy; {new Date().getFullYear()} Apoorv Patel Photography. All rights reserved.
           </span>
-          <span className="font-body text-[14px] text-on-surface-variant hidden sm:block">IND | UK</span>
+          <span className="font-body text-[14px] text-on-surface-variant hidden sm:block">Based in the United Kingdom</span>
         </div>
       </div>
     </footer>

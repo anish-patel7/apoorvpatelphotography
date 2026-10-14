@@ -34,14 +34,6 @@ export const services: Service[] = [
     features: ['Event coverage', 'Decoration details', 'Group photos', 'Candid moments', 'Quick delivery'],
   },
   {
-    id: 'maternity-photography',
-    title: 'Maternity Photography',
-    category: 'photography',
-    description: 'Beautiful maternity sessions celebrating the glow of motherhood with elegant and intimate photography.',
-    icon: 'Heart',
-    features: ['Indoor/outdoor options', 'Partner inclusion', 'Multiple outfit changes', 'Artistic editing', 'Print-ready files'],
-  },
-  {
     id: 'birthday-photography',
     title: 'Birthday Photography',
     category: 'photography',
@@ -121,10 +113,28 @@ export const services: Service[] = [
     icon: 'Wand',
     features: ['Reel editing', 'Creative composites', 'Artistic effects', 'Trend-based edits', 'Fast delivery'],
   },
+  {
+    id: 'multimedia-design',
+    title: 'Multimedia Design',
+    category: 'multimedia',
+    description: 'Creative multimedia solutions including video editing, motion graphics, digital content creation and visual storytelling.',
+    icon: 'Film',
+    features: ['Motion graphics & animation', 'Video editing & highlight reels', 'Digital content creation', 'Visual storytelling', 'Brand media packages'],
+  },
+  {
+    id: 'graphic-design',
+    title: 'Graphic Design',
+    category: 'design',
+    description: 'Professional graphic design for branding, promotional materials, social media creatives and digital visual communication.',
+    icon: 'Palette',
+    features: ['Brand identity & logo design', 'Promotional materials & brochures', 'Social media creative assets', 'Digital visual communication', 'Print & marketing collateral'],
+  },
 ];
 
 export const serviceCategories = [
   { id: 'photography', label: 'Photography', icon: 'Camera' },
   { id: 'videography', label: 'Videography', icon: 'Video' },
-  { id: 'editing', label: 'Editing', icon: 'Palette' },
+  { id: 'multimedia', label: 'Multimedia Design', icon: 'Film' },
+  { id: 'design', label: 'Graphic Design', icon: 'Palette' },
+  { id: 'editing', label: 'Editing', icon: 'Clapperboard' },
 ] as const;

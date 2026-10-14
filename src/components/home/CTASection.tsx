@@ -8,7 +8,7 @@ export default function CTASection() {
       </h2>
       <Link
         to="/contact"
-        className="bg-white text-black font-body text-[14px] font-semibold tracking-[0.05em] px-10 py-5 rounded-full btn-cinematic border border-white hover:bg-tertiary-fixed text-lg"
+        className="bg-on-background text-background font-body text-[14px] font-semibold tracking-[0.05em] px-10 py-5 rounded-full btn-cinematic border border-on-background hover:bg-tertiary hover:text-on-tertiary hover:border-tertiary transition-colors text-lg"
       >
         Get a Quote
       </Link>

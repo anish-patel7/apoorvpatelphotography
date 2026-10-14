@@ -6,10 +6,11 @@ export const portfolioCategories = [
   'Engagement',
   'Pre-Wedding',
   'Baby Shower',
-  'Maternity',
   'Family',
   'Personal',
   'Videography',
+  'Multimedia Design',
+  'Graphic Design',
   'Photo Editing',
   'Video Editing',
 ] as const;

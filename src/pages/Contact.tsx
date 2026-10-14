@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
 import SEO from '../components/common/SEO';
 import { useSubmitInquiry } from '../hooks/useLeads';
@@ -13,7 +13,7 @@ const contactBreadcrumbs = {
   ],
 };
 
-type InquiryType = 'photography' | 'editing' | 'training' | 'general';
+type InquiryType = 'photography' | 'multimedia' | 'design' | 'editing' | 'training' | 'general';
 
 interface FormErrors {
   name?: string;
@@ -22,12 +22,14 @@ interface FormErrors {
   eventDate?: string;
   eventType?: string;
   editingType?: string;
+  services?: string;
   course?: string;
   message?: string;
   general?: string;
 }
 
 export default function Contact() {
+  const [searchParams] = useSearchParams();
   const { submit: submitToDb, submitting: dbSubmitting } = useSubmitInquiry();
 
   const [formType, setFormType] = useState<InquiryType>('photography');
@@ -37,10 +39,6 @@ export default function Contact() {
   const [honeypot, setHoneypot] = useState('');
   const [errors, setErrors] = useState<FormErrors>({});
   const formLoadTime = useRef<number>(0);
-
-  useEffect(() => {
-    formLoadTime.current = Date.now();
-  }, []);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -62,6 +60,28 @@ export default function Contact() {
     message: '',
     budget: '',
   });
+
+  useEffect(() => {
+    formLoadTime.current = Date.now();
+    const serviceParam = searchParams.get('service');
+    if (serviceParam) {
+      const lower = serviceParam.toLowerCase();
+      if (lower.includes('multimedia')) {
+        setFormType('multimedia');
+        setFormData(prev => ({ ...prev, services: serviceParam }));
+      } else if (lower.includes('graphic') || lower.includes('design')) {
+        setFormType('design');
+        setFormData(prev => ({ ...prev, services: serviceParam }));
+      } else if (lower.includes('editing') || lower.includes('post-production')) {
+        setFormType('editing');
+      } else if (lower.includes('training') || lower.includes('course')) {
+        setFormType('training');
+      } else {
+        setFormType('photography');
+        setFormData(prev => ({ ...prev, eventType: serviceParam }));
+      }
+    }
+  }, [searchParams]);
 
   const businessEmail = import.meta.env.VITE_BUSINESS_EMAIL || 'contact@apoorvpatelphotography.com';
   const businessWhatsAppRaw = import.meta.env.VITE_WHATSAPP_NUMBER || '';
@@ -121,6 +141,14 @@ export default function Contact() {
       newErrors.editingType = 'Please select a post-production / editing service type.';
     }
 
+    if (formType === 'multimedia' && !formData.services) {
+      newErrors.services = 'Please select a multimedia solution type.';
+    }
+
+    if (formType === 'design' && !formData.services) {
+      newErrors.services = 'Please select a graphic design solution type.';
+    }
+
     if (formType === 'training' && !formData.course) {
       newErrors.course = 'Please choose a course or workshop.';
     }
@@ -136,6 +164,8 @@ export default function Contact() {
   const getCategoryTitle = () => {
     switch (formType) {
       case 'photography': return 'Photography / Videography Inquiry';
+      case 'multimedia': return 'Multimedia Design Inquiry';
+      case 'design': return 'Graphic Design Inquiry';
       case 'editing': return 'Post-Production & Editing Inquiry';
       case 'training': return 'Masterclass & Training Inquiry';
       case 'general': return 'General Studio Inquiry';
@@ -160,6 +190,14 @@ export default function Contact() {
       if (formData.eventType) lines.push(`• *Event Type:* ${formData.eventType}`);
       if (formData.eventDate) lines.push(`• *Target Date:* ${formData.eventDate}`);
       if (formData.location.trim()) lines.push(`• *Event Location:* ${formData.location.trim()}`);
+      if (formData.budget.trim()) lines.push(`• *Budget Range:* ${formData.budget.trim()}`);
+    } else if (formType === 'multimedia') {
+      if (formData.services) lines.push(`• *Multimedia Service:* ${formData.services}`);
+      if (formData.deliveryDate) lines.push(`• *Target Delivery:* ${formData.deliveryDate}`);
+      if (formData.budget.trim()) lines.push(`• *Budget Range:* ${formData.budget.trim()}`);
+    } else if (formType === 'design') {
+      if (formData.services) lines.push(`• *Graphic Design Service:* ${formData.services}`);
+      if (formData.deliveryDate) lines.push(`• *Target Delivery:* ${formData.deliveryDate}`);
       if (formData.budget.trim()) lines.push(`• *Budget Range:* ${formData.budget.trim()}`);
     } else if (formType === 'editing') {
       if (formData.editingType) lines.push(`• *Editing Service:* ${formData.editingType}`);
@@ -206,13 +244,19 @@ export default function Contact() {
 
     setSubmitError(null);
 
+    const eventTypeSubmission = formType === 'photography'
+      ? (formData.eventType || 'Photography / Videography')
+      : (formType === 'multimedia' || formType === 'design'
+        ? (formData.services || getCategoryTitle())
+        : getCategoryTitle());
+
     const result = await submitToDb({
       name: formData.name,
       email: formData.email,
       phone: formData.mobile,
       whatsapp: formData.whatsapp || formData.mobile,
-      eventType: formType === 'photography' ? formData.eventType : getCategoryTitle(),
-      eventDate: formData.eventDate || undefined,
+      eventType: eventTypeSubmission,
+      eventDate: formData.eventDate || formData.deliveryDate || undefined,
       location: formData.location || undefined,
       budget: formData.budget || undefined,
       message: generateInquiryMessage(),
@@ -254,6 +298,8 @@ export default function Contact() {
 
   const tabs = [
     { id: 'photography' as const, label: 'Photography / Videography' },
+    { id: 'multimedia' as const, label: 'Multimedia Design' },
+    { id: 'design' as const, label: 'Graphic Design' },
     { id: 'editing' as const, label: 'Editing' },
     { id: 'training' as const, label: 'Training' },
     { id: 'general' as const, label: 'General' },
@@ -262,8 +308,8 @@ export default function Contact() {
   return (
     <main className="pt-[104px]">
       <SEO
-        title="Book Your Date | Contact Apoorv Patel Photography — Inquiries & Quotes"
-        description="Connect directly with Apoorv Patel for wedding bookings, portrait sessions, editing services, or photography course enrollment across India and the UK."
+        title="Contact Studio | UK Photography & Creative Design — Inquiries & Bookings"
+        description="Connect with Apoorv Patel Photography for luxury weddings, cinematic videography, multimedia design, graphic design, and training across the United Kingdom."
         canonicalPath="/contact"
         image="/images/logo.png"
         schema={contactBreadcrumbs}
@@ -453,7 +499,7 @@ export default function Contact() {
                           className={`${inputClass(Boolean(errors.eventType))} appearance-none cursor-pointer`}
                         >
                           <option value="" className="bg-surface-container text-on-surface">Select event type</option>
-                          {['Wedding', 'Engagement', 'Pre-Wedding', 'Baby Shower', 'Maternity', 'Birthday', 'Family', 'Couple', 'Portrait', 'Special Event'].map(e => (
+                          {['Wedding Photography', 'Pre-Wedding Photography', 'Engagement Photography', 'Videography / Films', 'Baby Shower', 'Birthday Celebration', 'Family Photography', 'Couple & Portrait', 'Special Event'].map(e => (
                             <option key={e} value={e} className="bg-surface-container text-on-surface">{e}</option>
                           ))}
                         </select>
@@ -495,7 +541,121 @@ export default function Contact() {
                           name="budget"
                           value={formData.budget}
                           onChange={handleChange}
-                          placeholder="e.g. ₹1,00,000 / £1,500 (Optional)"
+                          placeholder="e.g. £1,500 / £3,000 (Optional)"
+                          className={inputClass()}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Multimedia Design Fields */}
+                  {formType === 'multimedia' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-8">
+                      <div>
+                        <label htmlFor="contact-multimedia" className={labelClass}>Multimedia Service *</label>
+                        <select
+                          id="contact-multimedia"
+                          name="services"
+                          required
+                          value={formData.services}
+                          onChange={handleChange}
+                          className={`${inputClass(Boolean(errors.services))} appearance-none cursor-pointer`}
+                        >
+                          <option value="" className="bg-surface-container text-on-surface">Select multimedia solution</option>
+                          {[
+                            'Multimedia Design (Complete Solution)',
+                            'Video Editing & Post-Production',
+                            'Motion Graphics & Title Animation',
+                            'Digital Content Creation',
+                            'Visual Storytelling & Brand Promos',
+                            'Social Media Creatives & Reels',
+                            'Custom Multimedia Production',
+                          ].map(e => (
+                            <option key={e} value={e} className="bg-surface-container text-on-surface">{e}</option>
+                          ))}
+                        </select>
+                        {errors.services && <p className="text-error text-xs mt-1.5">{errors.services}</p>}
+                      </div>
+
+                      <div>
+                        <label htmlFor="contact-deliveryDate-multi" className={labelClass}>Target Delivery Date</label>
+                        <input
+                          id="contact-deliveryDate-multi"
+                          type="date"
+                          name="deliveryDate"
+                          min={new Date().toISOString().split('T')[0]}
+                          value={formData.deliveryDate}
+                          onChange={handleChange}
+                          className={inputClass()}
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="contact-budget-multi" className={labelClass}>Estimated Budget</label>
+                        <input
+                          id="contact-budget-multi"
+                          type="text"
+                          name="budget"
+                          value={formData.budget}
+                          onChange={handleChange}
+                          placeholder="e.g. £500 / £1,500 (Optional)"
+                          className={inputClass()}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Graphic Design Fields */}
+                  {formType === 'design' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-8">
+                      <div>
+                        <label htmlFor="contact-graphic" className={labelClass}>Design Service *</label>
+                        <select
+                          id="contact-graphic"
+                          name="services"
+                          required
+                          value={formData.services}
+                          onChange={handleChange}
+                          className={`${inputClass(Boolean(errors.services))} appearance-none cursor-pointer`}
+                        >
+                          <option value="" className="bg-surface-container text-on-surface">Select design service</option>
+                          {[
+                            'Graphic Design (Complete Solution)',
+                            'Brand Identity & Logo Design',
+                            'Promotional Materials & Posters',
+                            'Social Media Creatives & Banners',
+                            'Digital Visual Communication',
+                            'Print & Event Collateral',
+                            'Custom Creative Design',
+                          ].map(e => (
+                            <option key={e} value={e} className="bg-surface-container text-on-surface">{e}</option>
+                          ))}
+                        </select>
+                        {errors.services && <p className="text-error text-xs mt-1.5">{errors.services}</p>}
+                      </div>
+
+                      <div>
+                        <label htmlFor="contact-deliveryDate-design" className={labelClass}>Target Delivery Date</label>
+                        <input
+                          id="contact-deliveryDate-design"
+                          type="date"
+                          name="deliveryDate"
+                          min={new Date().toISOString().split('T')[0]}
+                          value={formData.deliveryDate}
+                          onChange={handleChange}
+                          className={inputClass()}
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="contact-budget-design" className={labelClass}>Estimated Budget</label>
+                        <input
+                          id="contact-budget-design"
+                          type="text"
+                          name="budget"
+                          value={formData.budget}
+                          onChange={handleChange}
+                          placeholder="e.g. £300 / £1,000 (Optional)"
                           className={inputClass()}
                         />
                       </div>
@@ -656,7 +816,7 @@ export default function Contact() {
                 </li>
                 <li className="flex items-center gap-4 text-on-surface-variant">
                   <span className="material-symbols-outlined text-tertiary">location_on</span>
-                  <span className="font-body text-[16px]">India | United Kingdom</span>
+                  <span className="font-body text-[16px]">United Kingdom</span>
                 </li>
               </ul>
             </div>

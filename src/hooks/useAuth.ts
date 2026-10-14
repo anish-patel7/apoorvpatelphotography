@@ -143,6 +143,21 @@ export function useAuth() {
     try {
       const trimmedEmail = email.trim().toLowerCase();
 
+      // Safe Local Development Preview bypass when developer preview is requested in dev
+      if (isDev && trimmedEmail === 'developer@localhost') {
+        const devMockUser = {
+          id: 'dev-local-user',
+          email: trimmedEmail,
+          full_name: 'Developer (Local Preview)',
+          role: 'admin' as const,
+          is_active: true,
+        };
+        setUser({ id: 'dev-local-user', email: trimmedEmail } as unknown as User);
+        setAdminProfile(devMockUser);
+        setIsAuthenticated(true);
+        return;
+      }
+
       // If Supabase is configured: authenticate with Supabase Auth
       if (isSupabaseConfigured) {
         if (!trimmedEmail || !password) {

@@ -4,6 +4,7 @@ import Hero from '../components/home/Hero';
 import ServicesOverview from '../components/home/ServicesOverview';
 import FeaturedPortfolio from '../components/home/FeaturedPortfolio';
 import InstagramReels from '../components/home/InstagramReels';
+import TestimonialsSection from '../components/home/TestimonialsSection';
 import CTASection from '../components/home/CTASection';
 
 const homeSchema = {
@@ -14,18 +15,23 @@ const homeSchema = {
   'url': 'https://www.apoorvpatelphotography.com',
   'logo': 'https://www.apoorvpatelphotography.com/images/logo.png',
   'image': 'https://www.apoorvpatelphotography.com/images/real_work_dzvz4ssjoss.jpg',
-  'description': 'Award-winning wedding and portrait photography by Apoorv Patel. Specializing in luxury weddings, candid moments, and cinematic films across India and the UK.',
-  'slogan': 'Inspired by Innovation',
+  'description': 'UK-based photography, multimedia and graphic design studio by Apoorv Patel. Specializing in luxury weddings, cinematic videography, multimedia design, and creative visual branding in the United Kingdom.',
+  'slogan': 'Capturing Timeless Moments. Creating Inspiring Visuals. Based in the United Kingdom.',
   'email': 'contact@apoorvpatelphotography.com',
+  'address': {
+    '@type': 'PostalAddress',
+    'addressCountry': 'GB'
+  },
   'sameAs': [
     'https://www.instagram.com/apoorvpatel_photography/'
   ],
   'knowsAbout': [
-    'Wedding Photography',
+    'UK Wedding Photography',
     'Pre-Wedding Photography',
     'Engagement Photography',
-    'Candid Photography',
     'Cinematic Wedding Films',
+    'Multimedia Design',
+    'Graphic Design',
     'Photo Editing',
     'Video Editing',
     'Photography Training'
@@ -45,8 +51,8 @@ export default function Home() {
   return (
     <>
       <SEO
-        title="Apoorv Patel Photography | Luxury Wedding & Portrait Photographer — IND & UK"
-        description="Award-winning wedding and portrait photography by Apoorv Patel. Specializing in luxury weddings, candid moments, and cinematic films across India and the UK."
+        title="Apoorv Patel Photography | UK Wedding Photography & Creative Design"
+        description="Explore wedding photography, cinematic videography, multimedia design and graphic design by Apoorv Patel Photography, a UK-based creative business."
         canonicalPath="/"
         image="/images/real_work_dzvz4ssjoss.jpg"
         schema={homeSchema}
@@ -56,6 +62,7 @@ export default function Home() {
         <ServicesOverview />
         <FeaturedPortfolio />
         <InstagramReels />
+        <TestimonialsSection />
         <CTASection />
       </main>
     </>

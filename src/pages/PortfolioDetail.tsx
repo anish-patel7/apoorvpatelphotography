@@ -155,6 +155,7 @@ export default function PortfolioDetail() {
                   url={instagramUrl}
                   fallbackThumbnail={project.cover_image}
                   title={project.title}
+                  orientation={project.orientation}
                   aspectRatio={project.content_type === 'reel' ? 'reel' : 'auto'}
                   autoLoad={false}
                 />

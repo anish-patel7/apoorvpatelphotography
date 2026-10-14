@@ -77,6 +77,8 @@ export default function AdminServices() {
   const categoryStyles: Record<string, string> = {
     photography: 'bg-blue-500/15 text-blue-300 border border-blue-500/30',
     videography: 'bg-purple-500/15 text-purple-300 border border-purple-500/30',
+    multimedia: 'bg-pink-500/15 text-pink-300 border border-pink-500/30',
+    design: 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30',
     editing: 'bg-amber-500/15 text-amber-300 border border-amber-500/30',
   };
 
@@ -196,6 +198,8 @@ export default function AdminServices() {
                 >
                   <option value="photography" className="bg-surface-container">Photography</option>
                   <option value="videography" className="bg-surface-container">Videography</option>
+                  <option value="multimedia" className="bg-surface-container">Multimedia Design</option>
+                  <option value="design" className="bg-surface-container">Graphic Design</option>
                   <option value="editing" className="bg-surface-container">Editing</option>
                 </select>
               </div>

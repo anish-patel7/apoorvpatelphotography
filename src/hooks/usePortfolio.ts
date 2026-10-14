@@ -24,6 +24,10 @@ export interface Project {
   is_published?: boolean;
   display_order?: number;
   sort_order: number;
+  video_width?: number;
+  video_height?: number;
+  aspect_ratio?: number;
+  orientation?: 'portrait' | 'landscape' | 'square';
   created_at: string;
   updated_at: string;
 }
@@ -51,6 +55,7 @@ const fallbackProjects: Project[] = portfolioProjects.map((p, idx) => ({
   is_published: true,
   display_order: idx + 1,
   sort_order: idx + 1,
+  orientation: p.reelUrl ? 'portrait' : 'landscape',
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
 }));
@@ -79,6 +84,10 @@ function mapDbProject(row: any): Project {
     is_published: Boolean(row.is_published ?? true),
     display_order: row.display_order ?? row.sort_order ?? 0,
     sort_order: row.display_order ?? row.sort_order ?? 0,
+    video_width: row.video_width ? Number(row.video_width) : undefined,
+    video_height: row.video_height ? Number(row.video_height) : undefined,
+    aspect_ratio: row.aspect_ratio ? Number(row.aspect_ratio) : undefined,
+    orientation: row.orientation || undefined,
     created_at: row.created_at || new Date().toISOString(),
     updated_at: row.updated_at || new Date().toISOString(),
   };
@@ -263,6 +272,10 @@ export function usePortfolioAdmin() {
       is_featured: projectData.is_featured ?? projectData.featured ?? false,
       is_published: projectData.is_published ?? true,
       display_order: projectData.display_order ?? 0,
+      video_width: projectData.video_width ? Number(projectData.video_width) : null,
+      video_height: projectData.video_height ? Number(projectData.video_height) : null,
+      aspect_ratio: projectData.aspect_ratio ? Number(projectData.aspect_ratio) : null,
+      orientation: projectData.orientation || null,
     };
 
     const { data, error } = await supabase
@@ -306,6 +319,10 @@ export function usePortfolioAdmin() {
     if (updates.display_order !== undefined || updates.sort_order !== undefined) {
       dbUpdates.display_order = updates.display_order ?? updates.sort_order;
     }
+    if (updates.video_width !== undefined) dbUpdates.video_width = updates.video_width ? Number(updates.video_width) : null;
+    if (updates.video_height !== undefined) dbUpdates.video_height = updates.video_height ? Number(updates.video_height) : null;
+    if (updates.aspect_ratio !== undefined) dbUpdates.aspect_ratio = updates.aspect_ratio ? Number(updates.aspect_ratio) : null;
+    if (updates.orientation !== undefined) dbUpdates.orientation = updates.orientation || null;
 
     const { error } = await (supabase
       .from('portfolio_projects')
