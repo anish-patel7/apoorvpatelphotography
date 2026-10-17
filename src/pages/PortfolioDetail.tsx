@@ -231,26 +231,26 @@ export default function PortfolioDetail() {
             <X size={32} />
           </button>
           <button
-            onClick={e => { e.stopPropagation(); setLightboxIndex(i => (i! === 0 ? project.images.length - 1 : i! - 1)); }}
+            onClick={e => { e.stopPropagation(); setLightboxIndex(i => (i! === 0 ? galleryImages.length - 1 : i! - 1)); }}
             className="absolute left-4 sm:left-8 text-white/80 hover:text-white"
             aria-label="Previous"
           >
             <ChevronLeft size={40} />
           </button>
           <img
-            src={project.images[lightboxIndex]}
+            src={galleryImages[lightboxIndex]}
             alt={`${project.title} - ${lightboxIndex + 1}`}
             className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg"
             onClick={e => e.stopPropagation()}
           />
           <button
-            onClick={e => { e.stopPropagation(); setLightboxIndex(i => (i! === project.images.length - 1 ? 0 : i! + 1)); }}
+            onClick={e => { e.stopPropagation(); setLightboxIndex(i => (i! === galleryImages.length - 1 ? 0 : i! + 1)); }}
             className="absolute right-4 sm:right-8 text-white/80 hover:text-white"
             aria-label="Next"
           >
             <ChevronRight size={40} />
           </button>
-          <div className="absolute bottom-6 text-white/50 text-sm">{lightboxIndex + 1} / {project.images.length}</div>
+          <div className="absolute bottom-6 text-white/50 text-sm">{lightboxIndex + 1} / {galleryImages.length}</div>
         </div>
       )}
     </>

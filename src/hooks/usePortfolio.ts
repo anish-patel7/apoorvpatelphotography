@@ -122,11 +122,14 @@ export function usePortfolio(category?: string) {
       }
 
       const { data, error } = await query;
-      if (error) {
-        console.warn('Portfolio query notice:', error.message);
-        setProjects(fallbackProjects.filter(p => !category || category === 'All' || p.category.toLowerCase() === category.toLowerCase()));
+      if (error || !data || data.length === 0) {
+        let filtered = fallbackProjects;
+        if (category && category !== 'All') {
+          filtered = filtered.filter(p => p.category.toLowerCase() === category.toLowerCase());
+        }
+        setProjects(filtered);
       } else {
-        setProjects((data || []).map(mapDbProject));
+        setProjects(data.map(mapDbProject));
       }
     } catch {
       setProjects(fallbackProjects);
@@ -158,12 +161,25 @@ export function usePortfolioProject(slug: string) {
       .or(`slug.eq.${slug},id.eq.${slug}`)
       .single()
       .then(
-        ({ data, error }) => {
+        async ({ data, error }) => {
           if (error || !data) {
             const match = fallbackProjects.find(p => p.slug === slug || p.id === slug) ?? null;
             setProject(match);
           } else {
-            setProject(mapDbProject(data));
+            const mapped = mapDbProject(data);
+            try {
+              const { data: imgRows } = await supabase
+                .from('portfolio_images')
+                .select('image_url')
+                .eq('project_id', data.id)
+                .order('display_order', { ascending: true });
+              if (imgRows && imgRows.length > 0) {
+                mapped.images = imgRows.map(r => r.image_url);
+              }
+            } catch {
+              // fallback to mapped images
+            }
+            setProject(mapped);
           }
           setLoading(false);
         },
