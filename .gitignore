@@ -35,3 +35,7 @@ Thumbs.db
 # Local backups
 backups/
 
+# Raw client photography folder (preserved locally on computer)
+Work/
+scripts/scan_inventory_result.json
+scripts/benchmark_output/
