@@ -137,7 +137,7 @@ export default function ReelViewerModal({ reels, index, onClose, onNavigate }: R
             title={reel.title}
             orientation={orientation}
             aspectRatio={reel.content_type === 'post' ? 'auto' : 'reel'}
-            autoLoad={false}
+            autoLoad
           />
         )}
 
