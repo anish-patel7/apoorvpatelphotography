@@ -80,7 +80,7 @@ export interface Testimonial {
   updated_at?: string;
 }
 
-export type ReelMediaType = 'instagram' | 'video';
+export type ReelMediaType = 'instagram' | 'video' | 'youtube';
 
 export interface InstagramReel {
   id: string;
@@ -90,8 +90,11 @@ export interface InstagramReel {
   instagram_url?: string;
   /** Public Supabase Storage URL of an uploaded video (media_type 'video'). */
   video_url?: string;
+  /** Canonical YouTube Shorts / video link (media_type 'youtube'). */
+  youtube_url?: string;
   media_type?: ReelMediaType;
   title: string;
+  description?: string;
   featured: boolean;
   is_featured?: boolean;
   is_published?: boolean;

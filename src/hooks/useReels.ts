@@ -11,6 +11,7 @@ import {
   isTemporaryUrl,
 } from '../utils/reelMedia';
 import { getStoragePathFromPublicUrl } from './useStorage';
+import { parseYouTubeUrl } from '../utils/youtube';
 import { FriendlyError, isMissingSchemaError, logTechnicalError, toFriendly } from '../lib/adminErrors';
 import type { InstagramReel, ReelMediaType } from '../types';
 
@@ -19,6 +20,7 @@ export function mapDatabaseRowToReel(row: any): InstagramReel {
   const displayOrder = Number(row.display_order ?? row.sort_order ?? 0);
   let instagramUrl: string = row.instagram_url || row.url || '';
   let videoUrl: string = row.video_url || '';
+  let youtubeUrl: string = row.youtube_url || '';
   const thumbnail = row.thumbnail_url || row.thumbnail || '';
   const status = (row.status as 'configured' | 'incomplete') || 'configured';
 
@@ -27,13 +29,23 @@ export function mapDatabaseRowToReel(row: any): InstagramReel {
     videoUrl = instagramUrl;
     instagramUrl = '';
   }
+  // Before migration 012, YouTube links were saved in video_url (or instagram_url before 008).
+  if (!youtubeUrl && videoUrl && parseYouTubeUrl(videoUrl)) {
+    youtubeUrl = videoUrl;
+    videoUrl = '';
+  }
+  if (!youtubeUrl && instagramUrl && parseYouTubeUrl(instagramUrl)) {
+    youtubeUrl = instagramUrl;
+    instagramUrl = '';
+  }
   if (isTemporaryUrl(videoUrl)) videoUrl = '';
   if (isTemporaryUrl(instagramUrl)) instagramUrl = '';
 
-  const mediaType: ReelMediaType =
-    row.media_type === 'video' || row.media_type === 'instagram'
+  let mediaType: ReelMediaType =
+    row.media_type === 'video' || row.media_type === 'instagram' || row.media_type === 'youtube'
       ? row.media_type
       : videoUrl ? 'video' : 'instagram';
+  if (youtubeUrl && !videoUrl) mediaType = 'youtube';
 
   return {
     id: String(row.id),
@@ -43,7 +55,9 @@ export function mapDatabaseRowToReel(row: any): InstagramReel {
     url: instagramUrl,
     instagram_url: instagramUrl,
     video_url: videoUrl || undefined,
+    youtube_url: youtubeUrl || undefined,
     media_type: mediaType,
+    description: row.description || '',
     featured: isFeatured,
     is_featured: isFeatured,
     is_published: status === 'configured',
@@ -105,8 +119,23 @@ export function formatReelPayload(input: any) {
     payload.video_url = trimmed || null;
   }
 
+  if (input.youtube_url !== undefined) {
+    const trimmed = input.youtube_url === null ? '' : String(input.youtube_url).trim();
+    if (!trimmed) {
+      payload.youtube_url = null;
+    } else {
+      const parsed = parseYouTubeUrl(trimmed);
+      if (!parsed) throw new FriendlyError('Please enter a valid YouTube link (e.g. https://www.youtube.com/shorts/...).');
+      payload.youtube_url = parsed.canonicalUrl;
+    }
+  }
+
+  if (input.description !== undefined) {
+    payload.description = input.description === null ? '' : String(input.description).trim().slice(0, 500);
+  }
+
   if (input.media_type !== undefined) {
-    if (input.media_type !== 'instagram' && input.media_type !== 'video') {
+    if (input.media_type !== 'instagram' && input.media_type !== 'video' && input.media_type !== 'youtube') {
       throw new FriendlyError(`Unknown media type "${input.media_type}".`);
     }
     payload.media_type = input.media_type;
@@ -175,19 +204,44 @@ function toLegacyReelPayload(payload: Record<string, any>): Record<string, any> 
   return legacy;
 }
 
+/**
+ * Columns/values added by migration 012. Without it, YouTube entries are kept in
+ * video_url (mapDatabaseRowToReel recognises YouTube links there) and the optional
+ * description is skipped, so nothing the owner adds is lost.
+ */
+function toPre012ReelPayload(payload: Record<string, any>): Record<string, any> {
+  const compat = { ...payload };
+  delete compat.description;
+  if (compat.media_type === 'youtube') {
+    compat.media_type = 'video';
+    compat.video_url = compat.youtube_url ?? compat.video_url;
+  }
+  delete compat.youtube_url;
+  return compat;
+}
+
+const is012Missing = (error: any, payload: Record<string, any>) =>
+  ('youtube_url' in payload || 'description' in payload || payload.media_type === 'youtube') &&
+  (isMissingSchemaError(error) || (error?.code === '23514' && /media_type_check/i.test(error?.message || '')));
+
 async function writeWithSchemaFallback<T>(
   payload: Record<string, any>,
   write: (body: Record<string, any>) => PromiseLike<{ data: T; error: any }>,
   context: string
 ): Promise<T> {
   let { data, error } = await write(payload);
+  if (error && is012Missing(error, payload)) {
+    logTechnicalError(`${context} (database setup 012 not applied; saved in compatibility format)`, error);
+    payload = toPre012ReelPayload(payload);
+    ({ data, error } = await write(payload));
+  }
   if (error && isMissingSchemaError(error) && ('video_url' in payload || 'media_type' in payload)) {
     logTechnicalError(`${context} (database setup 008 not applied; saved in compatibility format)`, error);
     ({ data, error } = await write(toLegacyReelPayload(payload)));
   }
   if (error) {
     if (error.code === '23505') throw new FriendlyError('This Instagram link has already been added.');
-    if (error.code === '23514') throw new FriendlyError('Please add an Instagram link or upload a video before publishing.');
+    if (error.code === '23514') throw new FriendlyError('Please add a video, a YouTube link or an Instagram link before publishing.');
     throw toFriendly(error, context);
   }
   return data;
@@ -245,7 +299,7 @@ export function useReels(limit: number = HOMEPAGE_REEL_LIMIT) {
 
       if (queryError) {
         console.error('Instagram reels fetch error:', queryError.message);
-        setError('Instagram highlights are temporarily unavailable.');
+        setError('Our latest films and reels are temporarily unavailable.');
         setReels([]);
       } else {
         setError(null);
@@ -253,7 +307,7 @@ export function useReels(limit: number = HOMEPAGE_REEL_LIMIT) {
       }
     } catch (err) {
       console.error('Instagram reels network error:', err);
-      setError('Instagram highlights are temporarily unavailable.');
+      setError('Our latest films and reels are temporarily unavailable.');
       setReels([]);
     } finally {
       setLoading(false);

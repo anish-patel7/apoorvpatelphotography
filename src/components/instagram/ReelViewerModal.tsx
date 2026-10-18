@@ -4,6 +4,8 @@ import { ChevronLeft, ChevronRight, ExternalLink, Film, X } from 'lucide-react';
 import InstagramIcon from '../icons/InstagramIcon';
 import InstagramEmbed from './InstagramEmbed';
 import ReelVideoPlayer from './ReelVideoPlayer';
+import { InlineYouTubePlayer } from '../reels/InlineReelPlayers';
+import { parseYouTubeUrl } from '../../utils/youtube';
 import { INSTAGRAM_HANDLE, INSTAGRAM_PROFILE_URL, cleanInstagramUrl, isValidInstagramUrl } from '../../utils/instagram';
 import { getReelAspectRatio, getReelMediaType } from '../../utils/reelMedia';
 import type { InstagramReel } from '../../types';
@@ -58,7 +60,8 @@ export default function ReelViewerModal({ reels, index, onClose, onNavigate }: R
   const canonicalInstagramUrl = hasInstagramLink ? cleanInstagramUrl(instagramUrl) : '';
   const orientation = reel.orientation || 'portrait';
   const thumbnail = reel.thumbnail_url || reel.thumbnail || '';
-  const typeLabel = mediaType === 'video' ? 'Studio Video' : reel.content_type === 'post' ? 'Instagram Post' : 'Instagram Reel';
+  const youtube = mediaType === 'youtube' ? parseYouTubeUrl(reel.youtube_url) : null;
+  const typeLabel = mediaType === 'video' ? 'Studio Video' : youtube ? (youtube.isShort ? 'YouTube Short' : 'YouTube Video') : reel.content_type === 'post' ? 'Instagram Post' : 'Instagram Reel';
 
   return createPortal(
     <div
@@ -95,7 +98,7 @@ export default function ReelViewerModal({ reels, index, onClose, onNavigate }: R
       >
         <div className="flex items-center justify-between gap-3 pb-3 border-b border-outline-variant/20">
           <div className="flex items-center gap-2.5 min-w-0">
-            {mediaType === 'video'
+            {mediaType !== 'instagram'
               ? <Film size={18} className="text-tertiary shrink-0" />
               : <InstagramIcon size={18} className="text-tertiary shrink-0" />}
             <div className="min-w-0">
@@ -129,6 +132,13 @@ export default function ReelViewerModal({ reels, index, onClose, onNavigate }: R
             autoPlay
             instagramUrl={canonicalInstagramUrl || undefined}
           />
+        ) : youtube ? (
+          <div
+            className="relative mx-auto rounded-xl overflow-hidden border border-outline-variant/30 bg-black"
+            style={{ aspectRatio: String(getReelAspectRatio(reel)), width: `min(100%, calc(68vh * ${getReelAspectRatio(reel).toFixed(4)}))` }}
+          >
+            <InlineYouTubePlayer key={reel.id} videoId={youtube.id} title={reel.title || typeLabel} watchUrl={youtube.canonicalUrl} />
+          </div>
         ) : (
           <InstagramEmbed
             key={reel.id}

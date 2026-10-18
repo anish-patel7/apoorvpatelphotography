@@ -138,10 +138,12 @@ export function detectVideoDimensions(source: File | string): Promise<VideoDimen
 }
 
 /**
- * Captures a still frame from a local video file as a JPEG blob, for use as an
- * automatic thumbnail. Resolves null if the browser cannot decode the video.
+ * Captures a still frame from a video (a local file, or a stored video URL that allows
+ * cross-origin reads, as Supabase Storage does) as a JPEG blob for an automatic thumbnail.
+ * Fade-ins often start on black, so several moments are tried and the first frame that
+ * isn't almost black is used. Resolves null if the browser cannot decode the video.
  */
-export function captureVideoFrame(file: File, atSeconds = 1, maxEdge = 1080): Promise<Blob | null> {
+export function captureVideoFrame(source: File | string, atSeconds = 1, maxEdge = 1080): Promise<Blob | null> {
   return new Promise((resolve) => {
     if (typeof window === 'undefined') {
       resolve(null);
@@ -149,12 +151,16 @@ export function captureVideoFrame(file: File, atSeconds = 1, maxEdge = 1080): Pr
     }
 
     const video = document.createElement('video');
-    const objectUrl = URL.createObjectURL(file);
+    const objectUrl = typeof source === 'string' ? null : URL.createObjectURL(source);
+    if (typeof source === 'string') video.crossOrigin = 'anonymous';
     video.preload = 'auto';
     video.muted = true;
     video.playsInline = true;
-    video.src = objectUrl;
+    video.src = objectUrl || (source as string);
 
+    const canvas = document.createElement('canvas');
+    let candidates: number[] = [];
+    let fallback: Blob | null = null;
     let settled = false;
     const finish = (blob: Blob | null) => {
       if (settled) return;
@@ -162,13 +168,34 @@ export function captureVideoFrame(file: File, atSeconds = 1, maxEdge = 1080): Pr
       clearTimeout(timer);
       video.removeAttribute('src');
       video.load();
-      URL.revokeObjectURL(objectUrl);
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
       resolve(blob);
+    };
+    const next = () => {
+      const t = candidates.shift();
+      if (t === undefined) finish(fallback);
+      else video.currentTime = t;
+    };
+
+    /** Average brightness (0–255) of a small copy of the current frame. */
+    const brightness = (): number => {
+      const probe = document.createElement('canvas');
+      probe.width = 32;
+      probe.height = 32;
+      const pctx = probe.getContext('2d');
+      if (!pctx) return 255;
+      pctx.drawImage(video, 0, 0, 32, 32);
+      const { data } = pctx.getImageData(0, 0, 32, 32);
+      let sum = 0;
+      for (let i = 0; i < data.length; i += 4) sum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      return sum / (data.length / 4);
     };
 
     video.onloadedmetadata = () => {
       const duration = Number.isFinite(video.duration) ? video.duration : 0;
-      video.currentTime = Math.min(atSeconds, Math.max(0, duration / 2));
+      const first = Math.min(atSeconds, Math.max(0, duration / 2));
+      candidates = [first, duration * 0.25, duration * 0.5, duration * 0.75].filter((t, i, all) => t >= 0 && all.indexOf(t) === i);
+      next();
     };
 
     video.onseeked = () => {
@@ -178,7 +205,6 @@ export function captureVideoFrame(file: File, atSeconds = 1, maxEdge = 1080): Pr
         return;
       }
       const scale = Math.min(1, maxEdge / Math.max(w, h));
-      const canvas = document.createElement('canvas');
       canvas.width = Math.round(w * scale);
       canvas.height = Math.round(h * scale);
       const ctx = canvas.getContext('2d');
@@ -186,12 +212,24 @@ export function captureVideoFrame(file: File, atSeconds = 1, maxEdge = 1080): Pr
         finish(null);
         return;
       }
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob(blob => finish(blob), 'image/jpeg', 0.85);
+      let dark = false;
+      try {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        dark = brightness() < 14;
+      } catch {
+        // Cross-origin video without CORS headers: no frame can be read.
+        finish(null);
+        return;
+      }
+      canvas.toBlob(blob => {
+        if (!fallback) fallback = blob;
+        if (blob && !dark) finish(blob);
+        else next();
+      }, 'image/jpeg', 0.85);
     };
 
-    video.onerror = () => finish(null);
-    const timer = setTimeout(() => finish(null), 10000);
+    video.onerror = () => finish(fallback);
+    const timer = setTimeout(() => finish(fallback), 15000);
   });
 }
 

@@ -2,11 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Plus, Edit3, Trash2, Star, X, ExternalLink, AlertTriangle, Upload, Loader2, CheckCircle2,
   Eye, EyeOff, Video as VideoIcon, Sparkles, ArrowUp, ArrowDown, Play, Film, RefreshCw, Link2, Info,
+  ChevronDown, ChevronUp, ImageIcon,
 } from 'lucide-react';
 import InstagramIcon from '../../components/icons/InstagramIcon';
 import InstagramEmbed from '../../components/instagram/InstagramEmbed';
 import ReelViewerModal from '../../components/instagram/ReelViewerModal';
 import ReelVideoPlayer from '../../components/instagram/ReelVideoPlayer';
+import { InlineYouTubePlayer } from '../../components/reels/InlineReelPlayers';
+import { parseYouTubeUrl, getYouTubeThumbnail } from '../../utils/youtube';
 import { isValidInstagramUrl, cleanInstagramUrl, getInstagramType } from '../../utils/instagram';
 import { useReelsAdmin } from '../../hooks/useReels';
 import { useStorage, getStoragePathFromPublicUrl } from '../../hooks/useStorage';
@@ -26,6 +29,8 @@ import {
   formatFileSize,
   getReelAspectRatio,
   getReelMediaType,
+  getReelPoster,
+  hasPlayableMedia,
   isTemporaryUrl,
 } from '../../utils/reelMedia';
 import {
@@ -35,14 +40,21 @@ import {
   getAspectRatioLabel,
   type VideoOrientation,
 } from '../../utils/videoOrientation';
-import type { InstagramReel, ReelMediaType } from '../../types';
+import type { InstagramReel } from '../../types';
 
 type StatusFilter = 'all' | 'published' | 'draft' | 'featured';
 
+/** What the admin picked in the form. An Instagram reel with its original video attached is saved as media_type 'video'. */
+type ReelSource = 'upload' | 'instagram' | 'youtube';
+
 interface ReelForm {
-  mediaType: ReelMediaType;
+  source: ReelSource;
   title: string;
+  description: string;
   instagramUrl: string;
+  youtubeUrl: string;
+  /** True once the admin picks an orientation by hand (stops YouTube auto-detection overriding it). */
+  orientationTouched: boolean;
   /** Permanent public Storage URL of the uploaded video. Never a blob: URL. */
   videoUrl: string;
   thumbnail: string;
@@ -66,9 +78,12 @@ const ORIENTATION_LABEL: Record<VideoOrientation, string> = {
 
 function emptyForm(nextOrder: number): ReelForm {
   return {
-    mediaType: 'instagram',
+    source: 'upload',
     title: '',
+    description: '',
     instagramUrl: '',
+    youtubeUrl: '',
+    orientationTouched: false,
     videoUrl: '',
     thumbnail: '',
     displayOrder: String(nextOrder),
@@ -113,10 +128,17 @@ export default function AdminReels() {
   const [confirmDelete, setConfirmDelete] = useState<InstagramReel | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [youtubePreview, setYoutubePreview] = useState(false);
+  const [framing, setFraming] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
   // Files uploaded while the form is open. Unused ones are removed on save/cancel.
   const sessionUploads = useRef<string[]>([]);
+  // The video file picked in this session (lets "Use a frame from the video" work without re-downloading).
+  const localFile = useRef<File | null>(null);
+  // Thumbnails generated automatically from a video (safe to regenerate when the video is replaced).
+  const autoThumbnails = useRef<string[]>([]);
 
   // Revoke local object URLs when replaced or on unmount.
   useEffect(() => () => { if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl); }, [localPreviewUrl]);
@@ -169,9 +191,12 @@ export default function AdminReels() {
   const openCreate = () => {
     setEditing(null);
     setForm(emptyForm(nextOrder));
+    setAdvancedOpen(false);
+    setYoutubePreview(false);
     setFormError(null);
     setVideoWarning(null);
     setLocalPreviewUrl(null);
+    localFile.current = null;
     sessionUploads.current = [];
     setShowForm(true);
   };
@@ -182,11 +207,18 @@ export default function AdminReels() {
     const height = r.video_height || null;
     const label = width && height ? getAspectRatioLabel(width, height, orientation) : ORIENTATION_LABEL[orientation];
 
+    const type = getReelMediaType(r);
+    const instagramUrl = r.instagram_url || r.url || '';
     setEditing(r);
+    setAdvancedOpen(false);
+    setYoutubePreview(false);
     setForm({
-      mediaType: getReelMediaType(r),
+      source: type === 'youtube' ? 'youtube' : type === 'instagram' || (type === 'video' && isValidInstagramUrl(instagramUrl)) ? 'instagram' : 'upload',
       title: r.title || '',
-      instagramUrl: r.instagram_url || r.url || '',
+      description: r.description || '',
+      instagramUrl,
+      youtubeUrl: r.youtube_url || '',
+      orientationTouched: true,
       videoUrl: r.video_url || '',
       thumbnail: r.thumbnail_url || r.thumbnail || '',
       displayOrder: String(r.display_order ?? 0),
@@ -203,6 +235,7 @@ export default function AdminReels() {
     setFormError(null);
     setVideoWarning(null);
     setLocalPreviewUrl(null);
+    localFile.current = null;
     sessionUploads.current = [];
     setShowForm(true);
   };
@@ -251,13 +284,13 @@ export default function AdminReels() {
 
     // Local preview only — this blob: URL is never saved.
     setLocalPreviewUrl(URL.createObjectURL(file));
+    localFile.current = file;
 
     try {
       setVideoStage('Reading video dimensions…');
       const dims = await detectVideoDimensions(file);
       setForm(prev => ({
         ...prev,
-        mediaType: 'video',
         title: prev.title.trim() ? prev.title : file.name.replace(/\.[^/.]+$/, '').replace(/[-_]+/g, ' ').trim(),
         video_width: dims.detected ? dims.video_width : null,
         video_height: dims.detected ? dims.video_height : null,
@@ -279,19 +312,14 @@ export default function AdminReels() {
       sessionUploads.current.push(publicUrl);
       setForm(prev => ({ ...prev, videoUrl: publicUrl }));
 
-      // Generate a poster frame when no thumbnail has been chosen yet.
-      if (!form.thumbnail.trim()) {
+      // Generate a thumbnail from the video when none was chosen, or when the current one was
+      // generated automatically from a previous video. A hand-picked image is never replaced.
+      const current = form.thumbnail.trim();
+      if (!current || autoThumbnails.current.includes(current)) {
         setVideoStage('Creating thumbnail from video…');
-        const frame = await captureVideoFrame(file);
-        if (frame) {
-          const thumbFile = new File([frame], `${file.name.replace(/\.[^/.]+$/, '')}-poster.jpg`, { type: 'image/jpeg' });
-          try {
-            const thumbUrl = await uploadThumbnailFile(thumbFile);
-            setForm(prev => (prev.thumbnail.trim() ? prev : { ...prev, thumbnail: thumbUrl }));
-          } catch (thumbErr) {
-            friendlyError(thumbErr, 'Automatic reel thumbnail');
-          }
-        }
+        const thumbUrl = await thumbnailFromVideo(file);
+        if (thumbUrl) setForm(prev => (prev.thumbnail.trim() && prev.thumbnail !== current ? prev : { ...prev, thumbnail: thumbUrl }));
+        else setVideoWarning('A thumbnail could not be created automatically. Please upload a cover image below.');
       }
     } catch (err: any) {
       setLocalPreviewUrl(null);
@@ -299,6 +327,49 @@ export default function AdminReels() {
     } finally {
       setVideoStage(null);
     }
+  };
+
+  /** Captures a frame from a video file or stored video and uploads it as the thumbnail. */
+  const thumbnailFromVideo = async (source: File | string): Promise<string | null> => {
+    const frame = await captureVideoFrame(source);
+    if (!frame) return null;
+    const base = typeof source === 'string' ? 'video' : source.name.replace(/\.[^/.]+$/, '');
+    try {
+      const url = await uploadThumbnailFile(new File([frame], `${base}-poster.jpg`, { type: 'image/jpeg' }));
+      autoThumbnails.current.push(url);
+      return url;
+    } catch (thumbErr) {
+      friendlyError(thumbErr, 'Automatic reel thumbnail');
+      return null;
+    }
+  };
+
+  /** "Use a frame from the video" button: works for a newly selected or an already saved video. */
+  const regenerateThumbnail = async () => {
+    const source = localFile.current || form.videoUrl;
+    if (!source) return;
+    setFraming(true);
+    setFormError(null);
+    try {
+      const url = await thumbnailFromVideo(source);
+      if (url) setForm(prev => ({ ...prev, thumbnail: url }));
+      else setFormError('A frame could not be taken from this video. Please upload a cover image instead.');
+    } finally {
+      setFraming(false);
+    }
+  };
+
+  const handleYouTubeUrl = (value: string) => {
+    const parsed = parseYouTubeUrl(value);
+    setYoutubePreview(false);
+    setForm(prev => {
+      const next = { ...prev, youtubeUrl: value };
+      if (parsed && !prev.orientationTouched) {
+        next.orientation = parsed.isShort ? 'portrait' : 'landscape';
+        next.aspect_ratio_label = ORIENTATION_LABEL[next.orientation];
+      }
+      return next;
+    });
   };
 
   const handleThumbnailFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -327,6 +398,11 @@ export default function AdminReels() {
   // ---------------------------------------------------------------------------
   const trimmedInstagramUrl = form.instagramUrl.trim();
   const instagramUrlValid = !trimmedInstagramUrl || isValidInstagramUrl(trimmedInstagramUrl);
+  const trimmedYouTubeUrl = form.youtubeUrl.trim();
+  const parsedYouTube = parseYouTubeUrl(trimmedYouTubeUrl);
+  const youtubeUrlValid = !trimmedYouTubeUrl || parsedYouTube !== null;
+  /** What will actually be saved: an Instagram reel with its original video plays the video. */
+  const effectiveMediaType = form.source === 'youtube' ? 'youtube' : form.source === 'upload' || form.videoUrl ? 'video' : 'instagram';
   const uploadingAnything = Boolean(videoStage) || thumbStorage.uploading;
 
   const findDuplicate = (canonical: string) =>
@@ -343,12 +419,16 @@ export default function AdminReels() {
       setFormError('Please enter a valid Instagram post or reel URL (e.g. https://www.instagram.com/reel/...).');
       return;
     }
-    if (form.mediaType === 'instagram' && !trimmedInstagramUrl) {
+    if (form.source === 'instagram' && !trimmedInstagramUrl) {
       setFormError('Please enter the Instagram post or reel URL.');
       return;
     }
-    if (form.mediaType === 'video' && !form.videoUrl) {
+    if (form.source === 'upload' && !form.videoUrl) {
       setFormError('Please upload a video file.');
+      return;
+    }
+    if (form.source === 'youtube' && !parsedYouTube) {
+      setFormError(trimmedYouTubeUrl ? 'Please enter a valid YouTube link, e.g. https://www.youtube.com/shorts/... or https://youtu.be/...' : 'Please paste the YouTube Shorts or video link.');
       return;
     }
     if (isTemporaryUrl(form.videoUrl) || isTemporaryUrl(form.thumbnail)) {
@@ -365,18 +445,20 @@ export default function AdminReels() {
       }
     }
 
-    const isVideo = form.mediaType === 'video';
+    const isVideo = effectiveMediaType === 'video';
     const igType = canonicalInstagram ? getInstagramType(canonicalInstagram) : null;
-    const finalTitle = form.title.trim() || (isVideo ? 'Studio Film Highlight' : igType === 'post' ? 'Instagram Post' : 'Instagram Reel');
+    const finalTitle = form.title.trim() || (isVideo ? 'Studio Film Highlight' : effectiveMediaType === 'youtube' ? (parsedYouTube?.isShort ? 'YouTube Short' : 'YouTube Video') : igType === 'post' ? 'Instagram Post' : 'Instagram Reel');
     const orderNumber = Number.parseInt(form.displayOrder, 10);
     const finalVideoUrl = isVideo ? form.videoUrl : null;
     const finalThumbnail = form.thumbnail.trim();
 
     const payload = {
       title: finalTitle,
-      media_type: form.mediaType,
+      description: form.description.trim(),
+      media_type: effectiveMediaType,
       instagram_url: canonicalInstagram || null,
       video_url: finalVideoUrl,
+      youtube_url: effectiveMediaType === 'youtube' && parsedYouTube ? parsedYouTube.canonicalUrl : null,
       thumbnail_url: finalThumbnail,
       content_type: igType === 'post' ? ('post' as const) : ('reel' as const),
       status: form.published ? ('configured' as const) : ('incomplete' as const),
@@ -399,7 +481,7 @@ export default function AdminReels() {
         setNotice({ type: 'success', text: 'Your changes have been saved.' });
       } else {
         await create(payload);
-        setNotice({ type: 'success', text: form.published ? 'Reel published successfully.' : 'Reel saved as a draft.' });
+        setNotice({ type: 'success', text: form.published ? 'Published — it is now on your website.' : 'Saved as a draft.' });
       }
       await discardSessionUploads([finalVideoUrl || '', finalThumbnail]);
       setShowForm(false);
@@ -519,10 +601,10 @@ export default function AdminReels() {
         <div>
           <div className="flex items-center gap-2.5">
             <InstagramIcon size={22} className="text-tertiary" />
-            <h2 className="font-display text-2xl sm:text-3xl font-bold text-on-surface">Instagram Reels & Videos</h2>
+            <h2 className="font-display text-2xl sm:text-3xl font-bold text-on-surface">Films &amp; Reels</h2>
           </div>
           <p className="text-on-surface-variant text-sm mt-1">
-            Published + Featured entries appear in the homepage showcase (first {HOMEPAGE_REEL_LIMIT} by display order).
+            Upload a video, add an Instagram reel or paste a YouTube Short. Published + Featured items appear in the homepage "Latest Films &amp; Reels" section (first {HOMEPAGE_REEL_LIMIT} by order).
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -578,7 +660,7 @@ export default function AdminReels() {
         <div className="text-center py-20 px-4 bg-surface-container-low rounded-xl border border-outline-variant/30">
           <p className="text-on-surface font-semibold text-base">{reels.length === 0 ? 'No reels yet' : 'Nothing in this view'}</p>
           <p className="text-on-surface-variant text-xs mt-1">
-            {reels.length === 0 ? 'Click "Add Reel / Video" to link an Instagram reel or upload a video.' : 'Try another filter.'}
+            {reels.length === 0 ? 'Click "Add Reel / Video" to upload a video, add an Instagram reel or paste a YouTube link.' : 'Try another filter.'}
           </p>
         </div>
       ) : (
@@ -586,11 +668,11 @@ export default function AdminReels() {
           {visibleReels.map(reel => {
             const position = reels.findIndex(r => r.id === reel.id);
             const instagramUrl = reel.instagram_url || reel.url || '';
-            const thumb = reel.thumbnail_url || reel.thumbnail || '';
+            const thumb = getReelPoster(reel);
             const isPublished = reel.status === 'configured';
             const isFeatured = Boolean(reel.is_featured ?? reel.featured);
-            const isVideo = getReelMediaType(reel) === 'video';
-            const missingMedia = isVideo ? !reel.video_url : !isValidInstagramUrl(instagramUrl);
+            const type = getReelMediaType(reel);
+            const missingMedia = !hasPlayableMedia(reel);
             const busy = busyId === reel.id;
 
             return (
@@ -605,8 +687,9 @@ export default function AdminReels() {
                   {thumb ? (
                     <img src={thumb} alt={reel.title} loading="lazy" className={`w-full h-full ${reel.orientation && reel.orientation !== 'portrait' ? 'object-contain' : 'object-cover'} ${isPublished ? '' : 'opacity-70'}`} />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-on-surface-variant/50">
-                      {isVideo ? <Film size={32} /> : <InstagramIcon size={32} />}
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-on-surface-variant/50">
+                      {type === 'instagram' ? <InstagramIcon size={32} /> : <Film size={32} />}
+                      {!missingMedia && type === 'instagram' && <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 px-2 text-center">No cover image — edit to add one</span>}
                     </div>
                   )}
                   {!missingMedia && (
@@ -619,7 +702,8 @@ export default function AdminReels() {
                       {isPublished ? <Eye size={10} /> : <EyeOff size={10} />} {isPublished ? 'Live' : 'Draft'}
                     </span>
                     <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-black/75 text-white/90 border border-white/20 flex items-center gap-1">
-                      {isVideo ? <Film size={9} /> : <InstagramIcon size={9} />} {isVideo ? 'Upload' : 'Instagram'} · {ORIENTATION_LABEL[reel.orientation || 'portrait']}
+                      {type === 'instagram' ? <InstagramIcon size={9} /> : type === 'youtube' ? <Play size={9} fill="currentColor" /> : <Film size={9} />}{' '}
+                      {type === 'video' ? (isValidInstagramUrl(instagramUrl) ? 'Instagram + video' : 'Upload') : type === 'youtube' ? 'YouTube' : 'Instagram link'} · {ORIENTATION_LABEL[reel.orientation || 'portrait']}
                     </span>
                   </span>
                   {isFeatured && (
@@ -694,7 +778,7 @@ export default function AdminReels() {
             <div className="flex items-center justify-between pb-3 border-b border-outline-variant/30">
               <div>
                 <h3 id="reel-form-title" className="font-display text-lg font-bold text-on-surface">{editing ? 'Edit Reel / Video' : 'Add Reel / Video'}</h3>
-                <p className="text-xs text-on-surface-variant mt-0.5">Link an Instagram reel/post, or upload your own video file.</p>
+                <p className="text-xs text-on-surface-variant mt-0.5">Uploaded videos play on your website most reliably.</p>
               </div>
               <button onClick={() => void closeForm()} aria-label="Close" className="p-1.5 text-on-surface-variant hover:text-on-surface rounded-lg transition-colors cursor-pointer">
                 <X size={16} />
@@ -709,16 +793,19 @@ export default function AdminReels() {
             )}
 
             {/* Source type */}
-            <div className="grid grid-cols-2 gap-2 p-1 bg-surface-container-lowest rounded-xl border border-outline-variant/30">
+            <div className="grid grid-cols-3 gap-1.5 p-1 bg-surface-container-lowest rounded-xl border border-outline-variant/30" role="radiogroup" aria-label="Video source">
               {([
-                ['instagram', 'Instagram link', <InstagramIcon key="i" size={14} />],
-                ['video', 'Upload video', <VideoIcon key="v" size={14} />],
-              ] as Array<[ReelMediaType, string, React.ReactNode]>).map(([key, label, icon]) => (
+                ['upload', 'Upload video', <VideoIcon key="v" size={14} />],
+                ['instagram', 'Instagram reel', <InstagramIcon key="i" size={14} />],
+                ['youtube', 'YouTube', <Play key="y" size={14} />],
+              ] as Array<[ReelSource, string, React.ReactNode]>).map(([key, label, icon]) => (
                 <button
                   key={key}
                   type="button"
-                  onClick={() => setForm(f => ({ ...f, mediaType: key }))}
-                  className={`py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${form.mediaType === key ? 'bg-tertiary text-on-tertiary shadow-xs' : 'text-on-surface-variant hover:text-on-surface'}`}
+                  role="radio"
+                  aria-checked={form.source === key}
+                  onClick={() => { setForm(f => ({ ...f, source: key })); setYoutubePreview(false); }}
+                  className={`py-2 px-1 rounded-lg text-[11px] sm:text-xs font-semibold flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 transition-colors cursor-pointer ${form.source === key ? 'bg-tertiary text-on-tertiary shadow-xs' : 'text-on-surface-variant hover:text-on-surface'}`}
                 >
                   {icon} {label}
                 </button>
@@ -726,26 +813,65 @@ export default function AdminReels() {
             </div>
 
             <div className="space-y-4">
-              {form.mediaType === 'video' && (
+              {form.source === 'instagram' && (
+                <div>
+                  <label className={labelClass} htmlFor="reel-ig-url">Instagram reel or post link *</label>
+                  <div className="relative">
+                    <Link2 size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/60" />
+                    <input id="reel-ig-url" type="url" inputMode="url" value={form.instagramUrl} onChange={e => setForm({ ...form, instagramUrl: e.target.value })} placeholder="https://www.instagram.com/reel/..." className={`${inputClass} pl-9`} />
+                  </div>
+                  {!instagramUrlValid && (
+                    <p className="text-[11px] text-error mt-1">Use a link to a single reel or post, e.g. instagram.com/reel/ABC123/ or instagram.com/p/ABC123/.</p>
+                  )}
+                </div>
+              )}
+
+              {form.source === 'youtube' && (
+                <div>
+                  <label className={labelClass} htmlFor="reel-yt-url">YouTube Shorts or video link *</label>
+                  <div className="relative">
+                    <Link2 size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/60" />
+                    <input id="reel-yt-url" type="url" inputMode="url" value={form.youtubeUrl} onChange={e => handleYouTubeUrl(e.target.value)} placeholder="https://www.youtube.com/shorts/..." className={`${inputClass} pl-9`} />
+                  </div>
+                  {!youtubeUrlValid ? (
+                    <p className="text-[11px] text-error mt-1">This isn't a YouTube video link. Paste a link like youtube.com/shorts/…, youtube.com/watch?v=… or youtu.be/….</p>
+                  ) : parsedYouTube ? (
+                    <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold mt-1 flex items-center gap-1.5">
+                      <CheckCircle2 size={12} /> {parsedYouTube.isShort ? 'YouTube Short' : 'YouTube video'} found — it will play inside your website using YouTube's player.
+                    </p>
+                  ) : null}
+                </div>
+              )}
+
+              {/* Video file: required for Upload, optional (recommended) for Instagram */}
+              {form.source !== 'youtube' && (
                 <div className="p-3.5 bg-surface-container-lowest/80 rounded-xl border border-outline-variant/40 space-y-2.5">
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-xs font-semibold text-on-surface flex items-center gap-1.5">
-                      <VideoIcon size={14} className="text-tertiary" /> Video file *
+                      <VideoIcon size={14} className="text-tertiary" /> {form.source === 'upload' ? 'Video file *' : 'Original video (recommended)'}
                     </span>
                     <label className={`text-xs font-semibold flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-tertiary/40 text-tertiary hover:bg-tertiary/10 ${videoStage ? 'opacity-50 pointer-events-none' : 'cursor-pointer'}`}>
                       {videoStage ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
                       <span>{form.videoUrl ? 'Replace video' : 'Select video'}</span>
-                      <input type="file" accept={ALLOWED_REEL_VIDEO_TYPES.join(',')} onChange={handleVideoFile} disabled={Boolean(videoStage)} className="hidden" />
+                      <input type="file" accept={ALLOWED_REEL_VIDEO_TYPES.join(',')} onChange={handleVideoFile} disabled={Boolean(videoStage)} className="hidden" aria-label={form.videoUrl ? 'Replace video' : 'Select video'} />
                     </label>
                   </div>
                   <p className="text-[11px] text-on-surface-variant">
-                    MP4 (H.264) recommended · WebM or MOV accepted · max {formatFileSize(MAX_REEL_VIDEO_BYTES)}. Dimensions and orientation are detected automatically.
+                    {form.source === 'instagram'
+                      ? 'Add the same video you posted on Instagram so visitors can watch it on your website. '
+                      : ''}
+                    MP4 recommended · WebM or MOV accepted · max {formatFileSize(MAX_REEL_VIDEO_BYTES)}. A thumbnail is created automatically.
                   </p>
                   {videoStage && (
                     <p className="text-[11px] text-tertiary font-semibold flex items-center gap-1.5"><Loader2 size={12} className="animate-spin" /> {videoStage}</p>
                   )}
                   {!videoStage && form.videoUrl && (
-                    <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1.5"><CheckCircle2 size={12} /> Video uploaded</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1.5"><CheckCircle2 size={12} /> Video uploaded</p>
+                      {form.source === 'instagram' && (
+                        <button type="button" onClick={() => { setForm(f => ({ ...f, videoUrl: '' })); setLocalPreviewUrl(null); localFile.current = null; }} className="text-[11px] text-on-surface-variant hover:text-error underline cursor-pointer">Remove video</button>
+                      )}
+                    </div>
                   )}
                   {videoWarning && (
                     <p className="text-[11px] text-amber-700 dark:text-amber-400 flex items-start gap-1.5"><Info size={12} className="shrink-0 mt-0.5" /> {videoWarning}</p>
@@ -753,111 +879,71 @@ export default function AdminReels() {
                 </div>
               )}
 
-              {form.detectedNote && form.mediaType === 'video' && (
+              {form.source === 'instagram' && !form.videoUrl && (
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-700 dark:text-amber-400 text-[11px] flex items-start gap-2">
+                  <Info size={14} className="shrink-0 mt-0.5" />
+                  <span>Without the original video, Instagram decides where this reel can play — visitors will see your cover image and open it on Instagram. Upload the video above to play it on your website.</span>
+                </div>
+              )}
+
+              {form.detectedNote && form.source !== 'youtube' && form.videoUrl && (
                 <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-2">
                   <Sparkles size={14} className="shrink-0" />
                   <span className="font-medium">{form.detectedNote}</span>
                 </div>
               )}
 
+              {/* Thumbnail / cover image */}
               <div>
-                <label className={labelClass} htmlFor="reel-ig-url">
-                  {form.mediaType === 'instagram' ? 'Instagram reel or post URL *' : 'Original Instagram URL (optional)'}
-                </label>
-                <div className="relative">
-                  <Link2 size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/60" />
-                  <input
-                    id="reel-ig-url"
-                    type="url"
-                    inputMode="url"
-                    value={form.instagramUrl}
-                    onChange={e => setForm({ ...form, instagramUrl: e.target.value })}
-                    placeholder="https://www.instagram.com/reel/..."
-                    className={`${inputClass} pl-9`}
-                  />
-                </div>
-                {!instagramUrlValid ? (
-                  <p className="text-[11px] text-error mt-1">Use a link to a single reel or post, e.g. instagram.com/reel/ABC123/ or instagram.com/p/ABC123/.</p>
-                ) : form.mediaType === 'video' ? (
-                  <p className="text-[11px] text-on-surface-variant mt-1">Adds an "Open on Instagram" button to the video viewer.</p>
-                ) : null}
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-[1fr_120px] gap-3">
-                <div>
-                  <label className={labelClass} htmlFor="reel-title">Title</label>
-                  <input id="reel-title" type="text" value={form.title} maxLength={120} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="e.g. Royal Wedding Highlights" className={inputClass} />
-                </div>
-                <div>
-                  <label className={labelClass} htmlFor="reel-order">Order</label>
-                  <input id="reel-order" type="number" min={0} step={1} value={form.displayOrder} onChange={e => setForm({ ...form, displayOrder: e.target.value })} className={inputClass} />
-                </div>
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className={labelBase}>Orientation</span>
-                  <span className="text-[11px] text-tertiary font-semibold capitalize">{form.orientation} ({form.aspect_ratio_label})</span>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['portrait', 'landscape', 'square'] as VideoOrientation[]).map(o => (
-                    <button
-                      key={o}
-                      type="button"
-                      onClick={() => setForm(f => ({ ...f, orientation: o, aspect_ratio_label: ORIENTATION_LABEL[o] }))}
-                      className={`py-2 px-3 rounded-lg text-xs font-semibold capitalize border transition-all cursor-pointer flex flex-col items-center gap-0.5 ${
-                        form.orientation === o
-                          ? 'bg-tertiary text-on-tertiary border-tertiary shadow-xs'
-                          : 'bg-surface-container-lowest border-outline-variant/40 text-on-surface-variant hover:text-on-surface'
-                      }`}
-                    >
-                      <span>{o}</span>
-                      <span className="text-[10px] opacity-80">{ORIENTATION_LABEL[o]}</span>
-                    </button>
-                  ))}
-                </div>
-                <p className="text-[10px] text-on-surface-variant mt-1">
-                  {form.mediaType === 'video'
-                    ? 'Detected from the file; override only if detection was wrong.'
-                    : 'Instagram does not share video dimensions publicly — most reels are 9:16 portrait.'}
-                </p>
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className={labelBase} htmlFor="reel-thumb">Thumbnail image</label>
-                  <label className={`text-xs text-tertiary font-semibold flex items-center gap-1 ${thumbStorage.uploading ? 'opacity-50 pointer-events-none' : 'cursor-pointer hover:underline'}`}>
-                    {thumbStorage.uploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-                    <span>{thumbStorage.uploading ? 'Uploading…' : 'Upload image'}</span>
-                    <input type="file" accept={ALLOWED_REEL_THUMBNAIL_TYPES.join(',')} onChange={handleThumbnailFile} disabled={thumbStorage.uploading} className="hidden" />
-                  </label>
-                </div>
-                <div className="flex gap-3 items-start">
-                  {form.thumbnail && (
-                    <img src={form.thumbnail} alt="Thumbnail preview" className="w-14 aspect-[9/16] object-cover rounded-md border border-outline-variant/30 shrink-0" />
-                  )}
-                  <div className="flex-1 space-y-1">
-                    <input id="reel-thumb" type="text" value={form.thumbnail} onChange={e => setForm({ ...form, thumbnail: e.target.value })} placeholder="Upload an image or paste an image URL" className={inputClass} />
-                    <p className="text-[10px] text-on-surface-variant">
-                      JPG, PNG, WebP or AVIF · max {formatFileSize(MAX_REEL_THUMBNAIL_BYTES)}.{' '}
-                      {form.mediaType === 'video' ? 'A frame from the video is used automatically if left empty.' : 'Recommended: a screenshot of the reel cover (Instagram does not provide thumbnails publicly).'}
-                    </p>
+                <div className="flex items-center justify-between mb-1.5 gap-2">
+                  <span className={labelBase}>{form.source === 'instagram' && !form.videoUrl ? 'Cover image (recommended)' : 'Thumbnail'}</span>
+                  <div className="flex items-center gap-3">
+                    {(localPreviewUrl || form.videoUrl) && form.source !== 'youtube' && (
+                      <button type="button" onClick={() => void regenerateThumbnail()} disabled={framing || Boolean(videoStage)} className="text-xs text-tertiary font-semibold flex items-center gap-1 hover:underline cursor-pointer disabled:opacity-50">
+                        {framing ? <Loader2 size={12} className="animate-spin" /> : <Film size={12} />} Use a frame from the video
+                      </button>
+                    )}
+                    <label className={`text-xs text-tertiary font-semibold flex items-center gap-1 ${thumbStorage.uploading ? 'opacity-50 pointer-events-none' : 'cursor-pointer hover:underline'}`}>
+                      {thumbStorage.uploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                      <span>{thumbStorage.uploading ? 'Uploading…' : form.thumbnail ? 'Replace image' : 'Upload image'}</span>
+                      <input type="file" accept={ALLOWED_REEL_THUMBNAIL_TYPES.join(',')} onChange={handleThumbnailFile} disabled={thumbStorage.uploading} className="hidden" aria-label="Upload thumbnail image" />
+                    </label>
                   </div>
                 </div>
+                {(() => {
+                  const shown = form.thumbnail || (form.source === 'youtube' && parsedYouTube ? getYouTubeThumbnail(parsedYouTube.id, form.orientation) : '');
+                  return (
+                    <div className="flex gap-3 items-center">
+                      <div className="w-16 aspect-[9/16] rounded-md border border-outline-variant/30 bg-surface-container-lowest overflow-hidden shrink-0 flex items-center justify-center">
+                        {shown ? <img src={shown} alt="Thumbnail preview" className={`w-full h-full ${form.orientation === 'portrait' ? 'object-cover' : 'object-contain'}`} /> : <ImageIcon size={18} className="text-on-surface-variant/40" />}
+                      </div>
+                      <p className="text-[11px] text-on-surface-variant flex-1">
+                        {form.thumbnail
+                          ? 'This image is shown on the card before the video plays.'
+                          : form.source === 'youtube'
+                            ? (parsedYouTube ? "Using YouTube's thumbnail. Upload an image to replace it." : "YouTube's thumbnail appears here once you paste a link.")
+                            : form.source === 'upload' || form.videoUrl
+                              ? 'Created automatically from your video after upload. You can replace it.'
+                              : 'Upload a screenshot of the reel cover — Instagram does not share cover images with other websites.'}
+                        {' '}JPG, PNG or WebP · large photos are resized automatically.
+                      </p>
+                    </div>
+                  );
+                })()}
                 {form.thumbnailHint && form.thumbnailHint.orientation !== form.orientation && (
                   <button
                     type="button"
-                    onClick={() => setForm(f => ({ ...f, orientation: f.thumbnailHint!.orientation, aspect_ratio_label: ORIENTATION_LABEL[f.thumbnailHint!.orientation] }))}
+                    onClick={() => setForm(f => ({ ...f, orientationTouched: true, orientation: f.thumbnailHint!.orientation, aspect_ratio_label: ORIENTATION_LABEL[f.thumbnailHint!.orientation] }))}
                     className="w-full mt-2 text-left p-2 rounded-lg bg-tertiary/10 border border-tertiary/30 text-tertiary text-xs flex items-center justify-between hover:bg-tertiary/15 transition-colors cursor-pointer"
                   >
-                    <span>Thumbnail is {form.thumbnailHint.width}×{form.thumbnailHint.height} ({form.thumbnailHint.orientation})</span>
+                    <span>Image is {form.thumbnailHint.width}×{form.thumbnailHint.height} ({form.thumbnailHint.orientation})</span>
                     <span className="underline font-semibold text-[11px]">Use this orientation</span>
                   </button>
                 )}
               </div>
 
               {/* Preview before publishing */}
-              {form.mediaType === 'video' && previewVideoSrc && (
+              {effectiveMediaType === 'video' && previewVideoSrc && (
                 <div>
                   <span className={labelClass}>Preview</span>
                   <ReelVideoPlayer
@@ -870,9 +956,23 @@ export default function AdminReels() {
                   />
                 </div>
               )}
-              {form.mediaType === 'instagram' && trimmedInstagramUrl && instagramUrlValid && (
+              {form.source === 'youtube' && parsedYouTube && (
                 <div>
                   <span className={labelClass}>Preview</span>
+                  {youtubePreview ? (
+                    <div className="relative mx-auto rounded-xl overflow-hidden border border-outline-variant/30 bg-black" style={{ aspectRatio: String(getReelAspectRatio(form)), width: `min(100%, calc(45vh * ${getReelAspectRatio(form).toFixed(4)}))` }}>
+                      <InlineYouTubePlayer key={parsedYouTube.id} videoId={parsedYouTube.id} title={form.title || 'YouTube preview'} watchUrl={parsedYouTube.canonicalUrl} />
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => setYoutubePreview(true)} className="w-full py-2.5 rounded-lg border border-tertiary/40 text-tertiary text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-tertiary/10 cursor-pointer">
+                      <Play size={13} fill="currentColor" /> Preview the YouTube player
+                    </button>
+                  )}
+                </div>
+              )}
+              {effectiveMediaType === 'instagram' && trimmedInstagramUrl && instagramUrlValid && (
+                <div>
+                  <span className={labelClass}>Instagram preview</span>
                   <InstagramEmbed
                     key={cleanInstagramUrl(trimmedInstagramUrl)}
                     url={trimmedInstagramUrl}
@@ -891,8 +991,76 @@ export default function AdminReels() {
                 </label>
                 <label className="flex items-start gap-2.5 cursor-pointer text-xs text-on-surface">
                   <input type="checkbox" checked={form.featured} onChange={e => setForm({ ...form, featured: e.target.checked })} className="accent-tertiary mt-0.5" />
-                  <span><strong className="font-semibold">Featured</strong> — include in the homepage "Latest from Instagram" showcase (when published).</span>
+                  <span><strong className="font-semibold">Featured</strong> — show in the homepage "Latest Films &amp; Reels" section (when published).</span>
                 </label>
+              </div>
+
+              {/* Advanced settings */}
+              <div className="border border-outline-variant/30 rounded-xl">
+                <button type="button" onClick={() => setAdvancedOpen(o => !o)} aria-expanded={advancedOpen} className="w-full flex items-center justify-between px-3.5 py-3 text-xs font-semibold text-on-surface cursor-pointer">
+                  <span>Advanced settings <span className="font-normal text-on-surface-variant">— title, description, orientation, order{form.source !== 'instagram' ? ', Instagram link' : ''}</span></span>
+                  {advancedOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
+                {advancedOpen && (
+                  <div className="px-3.5 pb-4 space-y-4 border-t border-outline-variant/20 pt-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-[1fr_110px] gap-3">
+                      <div>
+                        <label className={labelClass} htmlFor="reel-title">Title (optional)</label>
+                        <input id="reel-title" type="text" value={form.title} maxLength={120} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="e.g. Royal Wedding Highlights" className={inputClass} />
+                      </div>
+                      <div>
+                        <label className={labelClass} htmlFor="reel-order">Order</label>
+                        <input id="reel-order" type="number" min={0} step={1} value={form.displayOrder} onChange={e => setForm({ ...form, displayOrder: e.target.value })} className={inputClass} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className={labelClass} htmlFor="reel-description">Description (optional)</label>
+                      <textarea id="reel-description" rows={2} maxLength={500} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="A sentence about this film — helps search engines and screen readers." className={inputClass} />
+                    </div>
+                    {form.source !== 'instagram' && (
+                      <div>
+                        <label className={labelClass} htmlFor="reel-ig-url">Also on Instagram (optional)</label>
+                        <div className="relative">
+                          <Link2 size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/60" />
+                          <input id="reel-ig-url" type="url" inputMode="url" value={form.instagramUrl} onChange={e => setForm({ ...form, instagramUrl: e.target.value })} placeholder="https://www.instagram.com/reel/..." className={`${inputClass} pl-9`} />
+                        </div>
+                        {!instagramUrlValid
+                          ? <p className="text-[11px] text-error mt-1">Use a link to a single reel or post, e.g. instagram.com/reel/ABC123/.</p>
+                          : <p className="text-[11px] text-on-surface-variant mt-1">Adds a small Instagram link to the card.</p>}
+                      </div>
+                    )}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className={labelBase}>Orientation</span>
+                        <span className="text-[11px] text-tertiary font-semibold capitalize">{form.orientation} ({form.aspect_ratio_label})</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        {(['portrait', 'landscape', 'square'] as VideoOrientation[]).map(o => (
+                          <button
+                            key={o}
+                            type="button"
+                            onClick={() => setForm(f => ({ ...f, orientationTouched: true, orientation: o, aspect_ratio_label: ORIENTATION_LABEL[o] }))}
+                            className={`py-2 px-3 rounded-lg text-xs font-semibold capitalize border transition-all cursor-pointer flex flex-col items-center gap-0.5 ${
+                              form.orientation === o
+                                ? 'bg-tertiary text-on-tertiary border-tertiary shadow-xs'
+                                : 'bg-surface-container-lowest border-outline-variant/40 text-on-surface-variant hover:text-on-surface'
+                            }`}
+                          >
+                            <span>{o}</span>
+                            <span className="text-[10px] opacity-80">{ORIENTATION_LABEL[o]}</span>
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-on-surface-variant mt-1">
+                        {effectiveMediaType === 'video'
+                          ? 'Detected from the video file; change only if it looks wrong.'
+                          : effectiveMediaType === 'youtube'
+                            ? 'Shorts are portrait; other YouTube videos are usually landscape.'
+                            : 'Most Instagram reels are 9:16 portrait.'}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -903,7 +1071,7 @@ export default function AdminReels() {
               <button
                 type="button"
                 onClick={handleSave}
-                disabled={saving || uploadingAnything || !instagramUrlValid}
+                disabled={saving || uploadingAnything || !instagramUrlValid || !youtubeUrlValid}
                 className="flex-1 sm:flex-none justify-center px-5 py-3 sm:py-2 rounded-lg bg-tertiary text-on-tertiary text-sm sm:text-xs font-semibold hover:bg-tertiary-fixed transition-colors shadow-xs cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
               >
                 {saving ? <><Loader2 size={14} className="animate-spin" /> Saving changes...</> : editing ? 'Save changes' : form.published ? 'Save & publish' : 'Save draft'}
@@ -923,7 +1091,7 @@ export default function AdminReels() {
                 <h3 id="delete-reel-title" className="font-display font-bold text-on-surface">Delete this entry?</h3>
                 <p className="text-xs text-on-surface-variant mt-1">
                   "{confirmDelete.title || 'Untitled'}" will be removed from the website and the dashboard
-                  {getReelMediaType(confirmDelete) === 'video' ? ', and its uploaded video and thumbnail files will be deleted' : ''}. This cannot be undone.
+                  {getReelMediaType(confirmDelete) === 'video' ? ', and its uploaded video and thumbnail files will be deleted' : ''}. Nothing is removed from Instagram or YouTube. This cannot be undone.
                 </p>
               </div>
             </div>
