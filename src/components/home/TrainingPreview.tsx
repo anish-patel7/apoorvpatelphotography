@@ -1,8 +1,12 @@
 import { Link } from 'react-router-dom';
 import { ArrowRight, BookOpen, GraduationCap } from 'lucide-react';
-import { trainingCourses } from '../../data/training';
+import { useTraining } from '../../hooks/useTraining';
 
 export default function TrainingPreview() {
+  const { courses, loading, error } = useTraining();
+  // Nothing to promote (or courses unavailable): hide the section rather than show stale content.
+  if (loading || error || courses.length === 0) return null;
+
   return (
     <section className="py-20 sm:py-28 bg-surface-container-low/40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -26,7 +30,7 @@ export default function TrainingPreview() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {trainingCourses.map(course => (
+          {courses.slice(0, 4).map(course => (
             <Link
               to="/training"
               key={course.id}
@@ -38,6 +42,7 @@ export default function TrainingPreview() {
                   alt={course.title}
                   className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                   loading="lazy"
+                  decoding="async"
                 />
               </div>
               <div className="p-5">

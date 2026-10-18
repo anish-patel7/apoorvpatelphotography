@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, MapPin, Calendar, Share2, X, ChevronLeft, ChevronRight, MessageCircle } from 'lucide-react';
+import { ArrowLeft, MapPin, Calendar, Share2, X, ChevronLeft, ChevronRight, MessageCircle, Play, ExternalLink } from 'lucide-react';
 import InstagramIcon from '../components/icons/InstagramIcon';
 import InstagramEmbed from '../components/instagram/InstagramEmbed';
 import SEO from '../components/common/SEO';
-import { usePortfolioProject, usePortfolio } from '../hooks/usePortfolio';
+import { usePortfolioProject, usePortfolio, getProjectCover } from '../hooks/usePortfolio';
 import { cleanInstagramUrl } from '../utils/instagram';
+import { parseWorkLink } from '../utils/workLinks';
 
 export default function PortfolioDetail() {
   const { id } = useParams<{ id: string }>();
@@ -46,7 +47,10 @@ export default function PortfolioDetail() {
     }
   };
 
-  const galleryImages = project.images && project.images.length > 0 ? project.images : [project.cover_image];
+  const cover = getProjectCover(project);
+  const gallery = project.media.length > 0 ? project.media : cover ? [{ url: cover, type: 'image' as const }] : [];
+  const externalLink = project.external_url ? parseWorkLink(project.external_url).info : null;
+  const title = project.display_title;
 
   const projectSchema = [
     {
@@ -55,17 +59,17 @@ export default function PortfolioDetail() {
       itemListElement: [
         { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.apoorvpatelphotography.com/' },
         { '@type': 'ListItem', position: 2, name: 'Portfolio', item: 'https://www.apoorvpatelphotography.com/portfolio' },
-        { '@type': 'ListItem', position: 3, name: project.title, item: `https://www.apoorvpatelphotography.com/portfolio/${project.id}` },
+        { '@type': 'ListItem', position: 3, name: title, item: `https://www.apoorvpatelphotography.com/portfolio/${project.id}` },
       ],
     },
     {
       '@context': 'https://schema.org',
       '@type': 'ImageObject',
-      name: project.title,
+      name: title,
       caption: project.description,
-      contentUrl: project.cover_image.startsWith('http')
-        ? project.cover_image
-        : `https://www.apoorvpatelphotography.com${project.cover_image.startsWith('/') ? project.cover_image : `/${project.cover_image}`}`,
+      contentUrl: cover.startsWith('http')
+        ? cover
+        : `https://www.apoorvpatelphotography.com${cover.startsWith('/') ? cover : `/${cover}`}`,
       creator: {
         '@type': 'Person',
         name: 'Apoorv Patel',
@@ -78,10 +82,10 @@ export default function PortfolioDetail() {
   return (
     <>
       <SEO
-        title={`${project.title} | Apoorv Patel Photography`}
-        description={project.description}
+        title={`${title} | Apoorv Patel Photography`}
+        description={project.description || `${project.category} photography by Apoorv Patel Photography.`}
         canonicalPath={`/portfolio/${project.id}`}
-        image={project.cover_image}
+        image={cover || undefined}
         type="article"
         schema={projectSchema}
       />
@@ -91,16 +95,18 @@ export default function PortfolioDetail() {
             <ArrowLeft size={18} /> Back to Portfolio
           </Link>
 
+          {cover && (
           <div className="aspect-[16/9] sm:aspect-[21/9] rounded-sm overflow-hidden mb-8 border border-outline-variant/10 shadow-lg bg-surface-container">
             <img
-              src={project.cover_image}
-              alt={project.title}
+              src={cover}
+              alt={title}
               className="w-full h-full object-cover"
               loading="eager"
               fetchPriority="high"
               decoding="async"
             />
           </div>
+          )}
 
           <div className="flex flex-col lg:flex-row gap-8 lg:gap-16">
             <div className="flex-1">
@@ -114,12 +120,12 @@ export default function PortfolioDetail() {
                   </span>
                 )}
               </div>
-              <h1 className="font-display text-[26px] sm:text-[38px] lg:text-[52px] text-on-background font-semibold mb-4 leading-tight">{project.title}</h1>
+              <h1 className="font-display text-[26px] sm:text-[38px] lg:text-[52px] text-on-background font-semibold mb-4 leading-tight">{title}</h1>
               <p className="font-body text-[16px] text-on-surface-variant leading-relaxed mb-6">{project.description}</p>
 
               <div className="flex flex-wrap gap-6 text-sm text-on-surface-variant">
-                <span className="flex items-center gap-1.5"><MapPin size={16} className="text-tertiary" /> {project.location}</span>
-                <span className="flex items-center gap-1.5"><Calendar size={16} className="text-tertiary" /> {project.date}</span>
+                {project.location && <span className="flex items-center gap-1.5"><MapPin size={16} className="text-tertiary" /> {project.location}</span>}
+                {project.date && <span className="flex items-center gap-1.5"><Calendar size={16} className="text-tertiary" /> {project.date}</span>}
               </div>
             </div>
 
@@ -132,6 +138,16 @@ export default function PortfolioDetail() {
                   className="px-5 py-2.5 border border-tertiary/50 text-tertiary rounded-sm text-sm font-semibold hover:bg-tertiary hover:text-background transition-colors flex items-center gap-2"
                 >
                   <InstagramIcon size={16} /> View on Instagram
+                </a>
+              )}
+              {externalLink && externalLink.kind === 'website' && (
+                <a
+                  href={externalLink.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-5 py-2.5 border border-tertiary/50 text-tertiary rounded-sm text-sm font-semibold hover:bg-tertiary hover:text-background transition-colors flex items-center gap-2"
+                >
+                  <ExternalLink size={16} /> View Work
                 </a>
               )}
               <button onClick={handleShare} className="px-5 py-2.5 border border-outline-variant/30 rounded-sm text-sm hover:bg-surface-container transition-colors flex items-center gap-2 text-on-surface-variant cursor-pointer">
@@ -153,8 +169,8 @@ export default function PortfolioDetail() {
               <div className="w-full lg:w-1/2 flex justify-center">
                 <InstagramEmbed
                   url={instagramUrl}
-                  fallbackThumbnail={project.cover_image}
-                  title={project.title}
+                  fallbackThumbnail={cover}
+                  title={title}
                   orientation={project.orientation}
                   aspectRatio={project.content_type === 'reel' ? 'reel' : 'auto'}
                   autoLoad={false}
@@ -186,23 +202,61 @@ export default function PortfolioDetail() {
         </section>
       )}
 
-      {/* Photo Gallery (Preserved for all projects) */}
+      {/* YouTube / Vimeo work links play in their official players */}
+      {externalLink?.embedUrl && (
+        <section className="py-12 bg-surface-container-low border-y border-outline-variant/15">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-outline-variant/20 bg-black shadow-lg">
+              <iframe
+                src={externalLink.embedUrl}
+                title={title}
+                className="absolute inset-0 w-full h-full border-0"
+                loading="lazy"
+                allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+                allowFullScreen
+                referrerPolicy="strict-origin-when-cross-origin"
+              />
+            </div>
+            <a href={externalLink.url} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-sm text-tertiary hover:underline">
+              Open original <ExternalLink size={14} />
+            </a>
+          </div>
+        </section>
+      )}
+
+      {/* Photo & video gallery */}
+      {gallery.length > 0 && (
       <section className="py-12 bg-background">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="font-display text-[32px] text-on-background font-semibold mb-6">Gallery</h2>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {galleryImages.map((img: string, i: number) => (
+            {gallery.map((item, i) => (
               <button
-                key={i}
+                key={`${item.url}-${i}`}
                 onClick={() => setLightboxIndex(i)}
-                className="aspect-square rounded-sm overflow-hidden hover:opacity-80 transition-opacity cursor-pointer border border-outline-variant/10 bg-surface-container"
+                className="relative aspect-square rounded-sm overflow-hidden hover:opacity-80 transition-opacity cursor-pointer border border-outline-variant/10 bg-surface-container"
+                aria-label={item.type === 'video' ? `Play video ${i + 1}` : `View photo ${i + 1}`}
               >
-                <img src={img} alt={`${project.title} - ${i + 1}`} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                {item.type === 'video' ? (
+                  <>
+                    {'poster' in item && item.poster ? (
+                      <img src={item.poster} alt={`${title} - video ${i + 1}`} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                    ) : (
+                      <video src={`${item.url}#t=0.5`} muted playsInline preload="metadata" className="w-full h-full object-cover" />
+                    )}
+                    <span className="absolute inset-0 flex items-center justify-center">
+                      <span className="w-12 h-12 rounded-full bg-black/50 border border-tertiary/50 flex items-center justify-center"><Play size={18} fill="currentColor" className="text-tertiary ml-0.5" /></span>
+                    </span>
+                  </>
+                ) : (
+                  <img src={item.url} alt={`${title} - ${i + 1}`} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                )}
               </button>
             ))}
           </div>
         </div>
       </section>
+      )}
 
       {related.length > 0 && (
         <section className="py-16 bg-surface-container-low">
@@ -212,10 +266,10 @@ export default function PortfolioDetail() {
               {related.map(p => (
                 <Link to={`/portfolio/${p.id}`} key={p.id} className="group rounded-sm overflow-hidden border border-outline-variant/10 bg-surface-container">
                   <div className="aspect-[4/3] overflow-hidden">
-                    <img src={p.cover_image} alt={p.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" loading="lazy" decoding="async" />
+                    {getProjectCover(p) && <img src={getProjectCover(p)} alt={p.display_title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" loading="lazy" decoding="async" />}
                   </div>
                   <div className="p-4 bg-surface-container">
-                    <h3 className="font-display font-semibold text-on-background group-hover:text-tertiary transition-colors">{p.title}</h3>
+                    <h3 className="font-display font-semibold text-on-background group-hover:text-tertiary transition-colors">{p.display_title}</h3>
                     <p className="text-on-surface-variant text-sm">{p.location}</p>
                   </div>
                 </Link>
@@ -225,32 +279,46 @@ export default function PortfolioDetail() {
         </section>
       )}
 
-      {lightboxIndex !== null && (
+      {lightboxIndex !== null && gallery[lightboxIndex] && (
         <div className="fixed inset-0 z-[60] bg-black/95 flex items-center justify-center" onClick={() => setLightboxIndex(null)}>
           <button onClick={() => setLightboxIndex(null)} className="absolute top-6 right-6 text-white/80 hover:text-white" aria-label="Close">
             <X size={32} />
           </button>
           <button
-            onClick={e => { e.stopPropagation(); setLightboxIndex(i => (i! === 0 ? galleryImages.length - 1 : i! - 1)); }}
+            onClick={e => { e.stopPropagation(); setLightboxIndex(i => (i! === 0 ? gallery.length - 1 : i! - 1)); }}
             className="absolute left-4 sm:left-8 text-white/80 hover:text-white"
             aria-label="Previous"
           >
             <ChevronLeft size={40} />
           </button>
-          <img
-            src={galleryImages[lightboxIndex]}
-            alt={`${project.title} - ${lightboxIndex + 1}`}
-            className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg"
-            onClick={e => e.stopPropagation()}
-          />
+          {gallery[lightboxIndex].type === 'video' ? (
+            <video
+              key={gallery[lightboxIndex].url}
+              src={gallery[lightboxIndex].url}
+              poster={('poster' in gallery[lightboxIndex] && gallery[lightboxIndex].poster) || undefined}
+              controls
+              autoPlay
+              playsInline
+              controlsList="nodownload"
+              className="max-w-[90vw] max-h-[85vh] rounded-lg bg-black"
+              onClick={e => e.stopPropagation()}
+            />
+          ) : (
+            <img
+              src={gallery[lightboxIndex].url}
+              alt={`${title} - ${lightboxIndex + 1}`}
+              className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg"
+              onClick={e => e.stopPropagation()}
+            />
+          )}
           <button
-            onClick={e => { e.stopPropagation(); setLightboxIndex(i => (i! === galleryImages.length - 1 ? 0 : i! + 1)); }}
+            onClick={e => { e.stopPropagation(); setLightboxIndex(i => (i! === gallery.length - 1 ? 0 : i! + 1)); }}
             className="absolute right-4 sm:right-8 text-white/80 hover:text-white"
             aria-label="Next"
           >
             <ChevronRight size={40} />
           </button>
-          <div className="absolute bottom-6 text-white/50 text-sm">{lightboxIndex + 1} / {galleryImages.length}</div>
+          <div className="absolute bottom-6 text-white/50 text-sm">{lightboxIndex + 1} / {gallery.length}</div>
         </div>
       )}
     </>

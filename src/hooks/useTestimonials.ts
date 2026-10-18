@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import type { Testimonial } from '../types';
+import { toFriendly } from '../lib/adminErrors';
 
 export function mapDatabaseRowToTestimonial(row: any): Testimonial {
   const isApproved = Boolean(row.is_approved ?? row.approved ?? false);
@@ -130,6 +131,7 @@ export function useTestimonials() {
 export function useTestimonialsAdmin() {
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const fetch = useCallback(async () => {
     setLoading(true);
@@ -139,8 +141,11 @@ export function useTestimonialsAdmin() {
       .order('display_order', { ascending: true })
       .order('created_at', { ascending: false });
 
-    if (error) console.error('Testimonials admin fetch error:', error);
-    setTestimonials(((data || []) as any[]).map(mapDatabaseRowToTestimonial));
+    if (error) setLoadError(toFriendly(error, 'Load testimonials', 'Your testimonials could not be loaded. Please refresh the page.').message);
+    else {
+      setLoadError(null);
+      setTestimonials(((data || []) as any[]).map(mapDatabaseRowToTestimonial));
+    }
     setLoading(false);
   }, []);
 
@@ -169,5 +174,23 @@ export function useTestimonialsAdmin() {
     await fetch();
   };
 
-  return { testimonials, loading, create, update, remove, refetch: fetch };
+  /** Swap with the neighbour and renumber display_order 1..n (controls public order). */
+  const move = async (id: string, direction: -1 | 1) => {
+    const ordered = [...testimonials];
+    const i = ordered.findIndex(t => t.id === id);
+    const j = i + direction;
+    if (i < 0 || j < 0 || j >= ordered.length) return;
+    [ordered[i], ordered[j]] = [ordered[j], ordered[i]];
+    const results = await Promise.all(
+      ordered
+        .map((t, idx) => ({ t, order: idx + 1 }))
+        .filter(({ t, order }) => t.display_order !== order)
+        .map(({ t, order }) => (supabase.from('testimonials').update as any)({ display_order: order }).eq('id', t.id))
+    );
+    await fetch();
+    const failed = results.find((r: any) => r.error);
+    if (failed) throw toFriendly((failed as any).error, 'Reorder testimonials');
+  };
+
+  return { testimonials, loading, loadError, create, update, remove, move, refetch: fetch };
 }

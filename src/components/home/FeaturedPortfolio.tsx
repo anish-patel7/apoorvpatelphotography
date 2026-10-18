@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useFeaturedPortfolio } from '../../hooks/usePortfolio';
+import { useFeaturedPortfolio, getProjectCover } from '../../hooks/usePortfolio';
 
 export default function FeaturedPortfolio() {
   const { projects, loading } = useFeaturedPortfolio();
@@ -40,8 +40,8 @@ export default function FeaturedPortfolio() {
             className="gallery-card rounded-2xl block relative group overflow-hidden bg-surface-container border border-outline-variant/30 h-[480px] md:h-[600px] shadow-2xl"
           >
             <img
-              src={projects[0].cover_image || projects[0].cover_image_url}
-              alt={projects[0].title}
+              src={getProjectCover(projects[0]) || undefined}
+              alt={projects[0].display_title}
               className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
               loading="eager"
               fetchPriority="high"
@@ -55,10 +55,10 @@ export default function FeaturedPortfolio() {
             )}
             <div className="gallery-overlay flex flex-col items-center justify-center p-8 text-center bg-gradient-to-t from-black/90 via-black/40 to-transparent">
               <span className="font-body text-xs tracking-widest uppercase text-tertiary mb-2 font-semibold">
-                {projects[0].category} &middot; {projects[0].location}
+                {projects[0].category}{projects[0].location ? <> &middot; {projects[0].location}</> : null}
               </span>
               <span className="font-display text-[28px] md:text-[38px] text-white leading-tight font-bold">
-                {projects[0].title}
+                {projects[0].display_title}
               </span>
             </div>
           </Link>
@@ -75,8 +75,8 @@ export default function FeaturedPortfolio() {
                 className={`gallery-card rounded-lg ${spanClass} min-h-[280px] md:min-h-0 block relative group overflow-hidden bg-surface-container border border-outline-variant/20`}
               >
                 <img
-                  src={item.cover_image || item.cover_image_url}
-                  alt={item.title}
+                  src={getProjectCover(item) || undefined}
+                  alt={item.display_title}
                   className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                   loading={idx === 0 ? 'eager' : 'lazy'}
                   decoding="async"
@@ -89,7 +89,7 @@ export default function FeaturedPortfolio() {
                 )}
                 <div className="gallery-overlay flex flex-col items-center justify-center p-6 text-center">
                   <span className="font-body text-xs tracking-widest uppercase text-tertiary mb-2 font-semibold">{item.category}</span>
-                  <span className="font-display text-[26px] md:text-[32px] text-white leading-tight">{item.title}</span>
+                  <span className="font-display text-[26px] md:text-[32px] text-white leading-tight">{item.display_title}</span>
                 </div>
               </Link>
             );

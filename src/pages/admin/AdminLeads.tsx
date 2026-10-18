@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Search, Eye, X, Mail, Phone, Calendar, RefreshCw, Trash2 } from 'lucide-react';
-import { useLeadsAdmin, type Lead } from '../../hooks/useLeads';
+import { useLeadsAdmin, type Lead, type LeadKind } from '../../hooks/useLeads';
+import { friendlyError } from '../../lib/adminErrors';
 import type { LeadStatus } from '../../lib/database.types';
 
 const statusOptions: LeadStatus[] = [
@@ -32,32 +33,45 @@ export default function AdminLeads() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [newNote, setNewNote] = useState('');
+  const [kind, setKind] = useState<'all' | LeadKind>('all');
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  const { leads, loading, updateStatus, addNote, remove, refetch } = useLeadsAdmin(
+  const { leads, loading, error: loadError, updateStatus, addNote, remove, refetch } = useLeadsAdmin(
     statusFilter === 'all' ? undefined : (statusFilter as LeadStatus),
-    search
+    search,
+    kind === 'all' ? undefined : kind
   );
 
+  const run = async (context: string, action: () => Promise<void>) => {
+    setActionError(null);
+    try {
+      await action();
+      return true;
+    } catch (err) {
+      setActionError(friendlyError(err, context, 'That change could not be saved. Please try again.'));
+      return false;
+    }
+  };
+
   const handleStatusChange = async (id: string, status: LeadStatus) => {
-    await updateStatus(id, status);
-    if (selectedLead?.id === id) {
+    if (await run('Update enquiry status', () => updateStatus(id, status)) && selectedLead?.id === id) {
       setSelectedLead(prev => prev ? { ...prev, status } : null);
     }
   };
 
   const handleAddNote = async (id: string) => {
     if (!newNote.trim()) return;
-    await addNote(id, newNote);
-    if (selectedLead?.id === id) {
-      setSelectedLead(prev => prev ? { ...prev, notes: [...prev.notes, newNote.trim()] } : null);
+    if (await run('Add enquiry note', () => addNote(id, newNote))) {
+      if (selectedLead?.id === id) {
+        setSelectedLead(prev => prev ? { ...prev, notes: [...prev.notes, newNote.trim()] } : null);
+      }
+      setNewNote('');
     }
-    setNewNote('');
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this customer inquiry?')) {
-      await remove(id);
-      if (selectedLead?.id === id) setSelectedLead(null);
+    if (window.confirm('Are you sure you want to delete this enquiry?')) {
+      if (await run('Delete enquiry', () => remove(id)) && selectedLead?.id === id) setSelectedLead(null);
     }
   };
 
@@ -65,8 +79,8 @@ export default function AdminLeads() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h2 className="font-display text-2xl sm:text-3xl font-bold text-on-surface">Customer Inquiries</h2>
-          <p className="text-on-surface-variant text-sm mt-1">Manage incoming client inquiries, requests, and follow-ups securely</p>
+          <h2 className="font-display text-2xl sm:text-3xl font-bold text-on-surface">Enquiries</h2>
+          <p className="text-on-surface-variant text-sm mt-1">Client bookings and student training enquiries from your website</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
@@ -82,6 +96,18 @@ export default function AdminLeads() {
           </div>
 
           <select
+            value={kind}
+            onChange={e => setKind(e.target.value as 'all' | LeadKind)}
+            aria-label="Enquiry type"
+            className="bg-surface-container-lowest border border-outline-variant/40 rounded-lg px-3.5 py-2 text-sm text-on-surface focus:outline-none focus:border-tertiary cursor-pointer"
+          >
+            <option value="all" className="bg-surface-container">All enquiries</option>
+            <option value="client" className="bg-surface-container">Client bookings</option>
+            <option value="student" className="bg-surface-container">Student / training</option>
+          </select>
+
+          <select
+            aria-label="Status"
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value)}
             className="bg-surface-container-lowest border border-outline-variant/40 rounded-lg px-3.5 py-2 text-sm text-on-surface focus:outline-none focus:border-tertiary focus:ring-1 focus:ring-tertiary/40 cursor-pointer transition-colors"
@@ -104,6 +130,10 @@ export default function AdminLeads() {
           </button>
         </div>
       </div>
+
+      {(loadError || actionError) && (
+        <div role="alert" className="bg-error/10 border border-error/30 text-error rounded-xl p-4 text-sm">{actionError || loadError}</div>
+      )}
 
       <div className="bg-surface-container-low rounded-xl border border-outline-variant/30 overflow-hidden shadow-xs">
         {loading && leads.length === 0 ? (
@@ -128,9 +158,9 @@ export default function AdminLeads() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-surface-container-lowest/50 text-on-surface-variant text-left border-b border-outline-variant/30">
-                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider">Client Name</th>
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider">Name</th>
                   <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider">Service / Event</th>
-                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider">Channel</th>
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider">Type</th>
                   <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider">Date</th>
                   <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider">Status</th>
                   <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-right">Actions</th>
@@ -145,8 +175,8 @@ export default function AdminLeads() {
                     </td>
                     <td className="px-5 py-3.5 text-on-surface">{lead.service_type || lead.event_type || 'General'}</td>
                     <td className="px-5 py-3.5">
-                      <span className="inline-block px-2 py-0.5 rounded-md bg-surface-container text-on-surface-variant text-xs font-medium border border-outline-variant/30">
-                        {lead.source}
+                      <span className={`inline-block px-2 py-0.5 rounded-md text-xs font-semibold border ${lead.source === 'training' ? 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30' : 'bg-surface-container text-on-surface-variant border-outline-variant/30'}`}>
+                        {lead.source === 'training' ? 'Student' : 'Client'}
                       </span>
                     </td>
                     <td className="px-5 py-3.5 text-on-surface-variant text-xs">
@@ -154,13 +184,14 @@ export default function AdminLeads() {
                     </td>
                     <td className="px-5 py-3.5">
                       <select
+                        aria-label={`Status for ${lead.name}`}
                         value={lead.status}
                         onChange={e => handleStatusChange(lead.id, e.target.value as LeadStatus)}
                         className={`px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider cursor-pointer focus:outline-none transition-colors ${statusColors[lead.status] || ''}`}
                       >
                         {statusOptions.map(s => (
                           <option key={s} value={s} className="bg-surface-container text-on-surface font-normal normal-case">
-                            {s.replace('_', ' ')}
+                            {s.replace(/_/g, ' ')}
                           </option>
                         ))}
                       </select>
@@ -171,13 +202,15 @@ export default function AdminLeads() {
                           onClick={() => setSelectedLead(lead)}
                           className="p-1.5 text-on-surface-variant hover:text-tertiary transition-colors"
                           title="View Details"
+                          aria-label={`View enquiry from ${lead.name}`}
                         >
                           <Eye size={16} />
                         </button>
                         <button
                           onClick={() => handleDelete(lead.id)}
                           className="p-1.5 text-on-surface-variant hover:text-error transition-colors"
-                          title="Delete Inquiry"
+                          title="Delete Enquiry"
+                          aria-label={`Delete enquiry from ${lead.name}`}
                         >
                           <Trash2 size={16} />
                         </button>

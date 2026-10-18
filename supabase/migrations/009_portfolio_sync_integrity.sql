@@ -50,3 +50,6 @@ create policy "Portfolio images public read" on public.portfolio_images
 drop policy if exists "Portfolio images admin full access" on public.portfolio_images;
 create policy "Portfolio images admin full access" on public.portfolio_images
   for all using (public.is_admin()) with check (public.is_admin());
+
+-- Tell the API layer about schema changes immediately
+notify pgrst, 'reload schema';

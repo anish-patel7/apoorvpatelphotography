@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { useTraining } from '../hooks/useTraining';
 import { CheckCircle2, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
 import SEO from '../components/common/SEO';
 import { useSubmitInquiry } from '../hooks/useLeads';
@@ -30,6 +31,11 @@ interface FormErrors {
 
 export default function Contact() {
   const [searchParams] = useSearchParams();
+  // Course list comes from the courses managed in Admin → Training.
+  const { courses } = useTraining();
+  const courseOptions = courses.length > 0
+    ? courses.map(c => c.title)
+    : ['Photography Masterclass', 'Videography & Filmmaking', 'Photo Editing & Retouching', 'Video Editing & Post-Production'];
   const { submit: submitToDb, submitting: dbSubmitting } = useSubmitInquiry();
 
   const [formType, setFormType] = useState<InquiryType>('photography');
@@ -76,6 +82,8 @@ export default function Contact() {
         setFormType('editing');
       } else if (lower.includes('training') || lower.includes('course')) {
         setFormType('training');
+        const courseParam = searchParams.get('course');
+        if (courseParam) setFormData(prev => ({ ...prev, course: courseParam }));
       } else {
         setFormType('photography');
         setFormData(prev => ({ ...prev, eventType: serviceParam }));
@@ -260,6 +268,8 @@ export default function Contact() {
       location: formData.location || undefined,
       budget: formData.budget || undefined,
       message: generateInquiryMessage(),
+      // Student (training) enquiries are kept separate from client bookings in Admin → Leads.
+      source: formType === 'training' ? 'training' : 'website',
       honeypot,
     });
 
@@ -277,7 +287,7 @@ export default function Contact() {
       setErrors({});
     } else {
       // Submission failed: keep all inputs intact
-      setSubmitError(result.error || 'Failed to submit inquiry to studio database. Please retry or contact us directly via WhatsApp.');
+      setSubmitError(result.error || 'Sorry, your enquiry could not be sent. Please try again or contact us directly via WhatsApp.');
     }
   };
 
@@ -319,7 +329,7 @@ export default function Contact() {
           Get in Touch
         </h1>
         <p className="font-body text-[18px] text-on-surface-variant max-w-2xl mx-auto leading-relaxed">
-          Ready to capture your special moments? Submit your inquiry directly to our studio database below.
+          Ready to capture your special moments? Send us your enquiry below and we'll be in touch.
         </p>
       </header>
 
@@ -712,7 +722,7 @@ export default function Contact() {
                           className={`${inputClass(Boolean(errors.course))} appearance-none cursor-pointer`}
                         >
                           <option value="" className="bg-surface-container text-on-surface">Select course</option>
-                          {['Photography Masterclass', 'Videography & Filmmaking', 'Photo Editing & Retouching', 'Video Editing & Post-Production'].map(c => (
+                          {Array.from(new Set([...courseOptions, ...(formData.course ? [formData.course] : [])])).map(c => (
                             <option key={c} value={c} className="bg-surface-container text-on-surface">{c}</option>
                           ))}
                         </select>

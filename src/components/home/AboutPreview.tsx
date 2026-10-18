@@ -9,7 +9,7 @@ export default function AboutPreview() {
           <div className="relative">
             <div className="aspect-[4/5] rounded-2xl overflow-hidden">
               <img
-                src="https://images.unsplash.com/photo-1554048612-b6a482bc67e5?w=800&q=80"
+                src="/images/portfolio/engagement-session/photo_10.webp"
                 alt="Photographer at work"
                 className="w-full h-full object-cover"
                 loading="lazy"

@@ -28,6 +28,9 @@ A failed query shows an error message and is logged to the console. It never sho
 
 ## One-time database steps (Supabase → SQL Editor)
 
+> Simplest: run `supabase/setup/run_once_admin_setup.sql`, which includes 008, 009 and 010
+> (categories, video items, work links). See `docs/ADMIN_SETUP.md`.
+
 1. Run `supabase/migrations/009_portfolio_sync_integrity.sql`. It removes duplicate gallery rows,
    adds a unique key on `(project_id, image_url)`, adds an index, and re-applies the RLS policies.
    It never deletes projects.

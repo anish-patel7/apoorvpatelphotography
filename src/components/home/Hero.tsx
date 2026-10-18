@@ -15,8 +15,8 @@ export default function Hero() {
     <header className="relative w-full h-screen flex items-center justify-center overflow-hidden">
       <div className="absolute inset-0 z-0">
         <img
-          src="https://lh3.googleusercontent.com/aida-public/AB6AXuCPb5GeAIOP94_pbGqYzTxKRiAPffukqGXDpjv0iQ2JuBMUTg7aMZkRLlHgNX3VKyKJtg_6-uLVp0_bRzFR3SS2B8azWS5Xn-Ej_-t6qr6P0BPv-f9PBMYv2daJQf2y3Pkgx447cefm5WJUc5xe9q8Q2H-zPIinL3MFjk4fu2e7BTmUvkcC3EUOIwGbz7sjdnuDjXNNynQ6T25oiR9qUGhmsgss-uwVY6qxC7nYCYhztU-SVHKX0WyK"
-          alt="Cinematic landscape at dawn"
+          src="/images/portfolio/wedding-collection/photo_02.webp"
+          alt="Bride in an ivory lehenga seated before an arched venue, photographed by Apoorv Patel"
           className="w-full h-full object-cover opacity-60"
           loading="eager"
           fetchPriority="high"

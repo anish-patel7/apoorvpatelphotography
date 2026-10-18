@@ -1,9 +1,13 @@
 import { useState } from 'react';
-import { Plus, Edit3, Trash2, X, Loader2, Database } from 'lucide-react';
+import { Plus, Edit3, Trash2, X, Loader2, ArrowUp, ArrowDown, Eye, EyeOff, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { friendlyError } from '../../lib/adminErrors';
 import { useServicesAdmin, type Service } from '../../hooks/useServices';
 
 export default function AdminServices() {
-  const { services: serviceList, loading, create, update, remove } = useServicesAdmin();
+  const { services: serviceList, loading, error: loadError, create, update, remove, move } = useServicesAdmin();
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const flash = (n: { type: 'success' | 'error'; text: string }) => { setNotice(n); setTimeout(() => setNotice(null), n.type === 'error' ? 7000 : 3500); };
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Service | null>(null);
@@ -13,6 +17,8 @@ export default function AdminServices() {
     category: 'photography' as Service['category'],
     description: '',
     features: '',
+    price_label: '',
+    published: true,
   });
 
   const handleEdit = (s: Service) => {
@@ -22,6 +28,8 @@ export default function AdminServices() {
       category: s.category,
       description: s.description,
       features: (s.features || []).join(', '),
+      price_label: s.price_label || '',
+      published: s.is_active ?? true,
     });
     setShowForm(true);
   };
@@ -37,20 +45,25 @@ export default function AdminServices() {
         description: form.description.trim(),
         icon: 'Camera',
         features: form.features.split(',').map(f => f.trim()).filter(Boolean),
-        sort_order: editing ? editing.sort_order : serviceList.length + 1,
+        price_label: form.price_label.trim(),
+        is_active: form.published,
+        sort_order: editing ? editing.sort_order : serviceList.reduce((m, x) => Math.max(m, x.sort_order), 0) + 1,
       };
 
       if (editing) {
-        await update(editing.id, data);
+        await update(editing.id, { ...data, icon: editing.icon || 'Camera' });
+        flash({ type: 'success', text: 'Your changes have been saved.' });
       } else {
-        await create({
-          ...data,
-          slug: form.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-        });
+        const base = form.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'service';
+        const taken = new Set(serviceList.map(x => x.slug));
+        let slug = base;
+        for (let n = 2; taken.has(slug); n++) slug = `${base}-${n}`;
+        await create({ ...data, slug });
+        flash({ type: 'success', text: form.published ? 'Service published.' : 'Service saved as hidden.' });
       }
       resetForm();
     } catch (err: any) {
-      alert(err?.message || 'Failed to save service.');
+      alert(friendlyError(err, 'Save service', 'Your changes could not be saved. Please try again.'));
     } finally {
       setSaving(false);
     }
@@ -60,8 +73,9 @@ export default function AdminServices() {
     if (window.confirm('Are you sure you want to delete this service?')) {
       try {
         await remove(id);
+        flash({ type: 'success', text: 'Service deleted.' });
       } catch (err: any) {
-        alert(err?.message || 'Delete operation failed.');
+        alert(friendlyError(err, 'Delete service', 'This service could not be deleted. Please try again.'));
       }
     }
   };
@@ -69,7 +83,7 @@ export default function AdminServices() {
   const resetForm = () => {
     setShowForm(false);
     setEditing(null);
-    setForm({ title: '', category: 'photography', description: '', features: '' });
+    setForm({ title: '', category: 'photography', description: '', features: '', price_label: '', published: true });
   };
 
   const inputClass = 'w-full bg-surface-container-lowest border border-outline-variant/40 rounded-lg px-3.5 py-2.5 text-sm text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none focus:border-tertiary focus:ring-1 focus:ring-tertiary/40 transition-colors';
@@ -82,14 +96,21 @@ export default function AdminServices() {
     editing: 'bg-amber-500/15 text-amber-300 border border-amber-500/30',
   };
 
+  const quick = async (id: string, action: () => Promise<void>, success: string) => {
+    setBusyId(id);
+    try { await action(); flash({ type: 'success', text: success }); }
+    catch (err) { flash({ type: 'error', text: friendlyError(err, 'Service quick action', 'That change could not be saved. Please try again.') }); }
+    finally { setBusyId(null); }
+  };
+
   return (
     <div className="space-y-6">
-      <div className="bg-surface-container-low border border-outline-variant/30 rounded-xl p-4 flex items-center justify-between gap-4 text-xs">
-        <div className="flex items-center gap-2.5 text-on-surface-variant">
-          <Database size={15} className="text-tertiary shrink-0" />
-          <span><strong>PostgreSQL Database Connected:</strong> Real-time persistence via Supabase <code className="text-tertiary font-mono">services</code> table.</span>
+      {notice && (
+        <div role="status" className={`px-4 py-3 rounded-xl flex items-center gap-2.5 text-sm border ${notice.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400' : 'bg-error/10 border-error/30 text-error'}`}>
+          {notice.type === 'success' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />} {notice.text}
         </div>
-      </div>
+      )}
+      {loadError && <div role="alert" className="bg-error/10 border border-error/30 text-error rounded-xl p-4 text-sm">{loadError}</div>}
 
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -107,7 +128,7 @@ export default function AdminServices() {
       {loading && serviceList.length === 0 ? (
         <div className="text-center py-20 text-on-surface-variant text-sm">
           <Loader2 size={24} className="animate-spin mx-auto mb-2 text-tertiary" />
-          <span>Loading services from database...</span>
+          <span>Loading services…</span>
         </div>
       ) : serviceList.length === 0 ? (
         <div className="text-center py-20 px-4 bg-surface-container-low rounded-xl border border-outline-variant/30">
@@ -116,11 +137,16 @@ export default function AdminServices() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {serviceList.map(s => (
-            <div key={s.id} className="bg-surface-container-low rounded-xl p-5 border border-outline-variant/30 hover:border-outline-variant/60 transition-colors shadow-xs flex flex-col justify-between">
+          {serviceList.map((s, idx) => (
+            <div key={s.id} className={`bg-surface-container-low rounded-xl p-5 border hover:border-outline-variant/60 transition-colors shadow-xs flex flex-col justify-between ${s.is_active === false ? 'border-dashed border-amber-500/50 opacity-80' : 'border-outline-variant/30'}`}>
               <div className="space-y-3">
                 <div className="flex items-start justify-between gap-2">
-                  <h3 className="font-semibold text-base text-on-surface">{s.title}</h3>
+                  <div>
+                    <h3 className="font-semibold text-base text-on-surface">{s.title}</h3>
+                    <span className={`inline-flex items-center gap-1 mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${s.is_active === false ? 'bg-amber-500/90 text-black' : 'bg-emerald-500/90 text-white'}`}>
+                      {s.is_active === false ? <EyeOff size={10} /> : <Eye size={10} />} {s.is_active === false ? 'Hidden' : 'Published'}
+                    </span>
+                  </div>
                   <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wider ${categoryStyles[s.category] || ''}`}>
                     {s.category}
                   </span>
@@ -141,13 +167,24 @@ export default function AdminServices() {
                   onClick={() => handleEdit(s)}
                   className="p-1.5 rounded-md text-on-surface-variant hover:text-tertiary hover:bg-surface-container transition-colors cursor-pointer"
                   title="Edit Service"
+                  aria-label={`Edit ${s.title}`}
                 >
                   <Edit3 size={15} />
+                </button>
+                <button onClick={() => quick(s.id, () => move(s.id, -1), 'Order updated.')} disabled={busyId === s.id || idx === 0} className="p-1.5 rounded-md text-on-surface-variant hover:text-tertiary disabled:opacity-30 cursor-pointer" aria-label={`Move ${s.title} earlier`}><ArrowUp size={15} /></button>
+                <button onClick={() => quick(s.id, () => move(s.id, 1), 'Order updated.')} disabled={busyId === s.id || idx === serviceList.length - 1} className="p-1.5 rounded-md text-on-surface-variant hover:text-tertiary disabled:opacity-30 cursor-pointer" aria-label={`Move ${s.title} later`}><ArrowDown size={15} /></button>
+                <button
+                  onClick={() => quick(s.id, () => update(s.id, { is_active: s.is_active === false }), s.is_active === false ? 'Service published.' : 'Service hidden from the website.')}
+                  disabled={busyId === s.id}
+                  className="px-2 py-1 rounded-md text-xs font-semibold border border-outline-variant/40 text-on-surface-variant hover:text-on-surface cursor-pointer disabled:opacity-40"
+                >
+                  {s.is_active === false ? 'Publish' : 'Hide'}
                 </button>
                 <button
                   onClick={() => handleDelete(s.id)}
                   className="p-1.5 rounded-md text-on-surface-variant hover:text-error hover:bg-surface-container transition-colors cursor-pointer ml-auto"
                   title="Delete Service"
+                  aria-label={`Delete ${s.title}`}
                 >
                   <Trash2 size={15} />
                 </button>
@@ -229,6 +266,25 @@ export default function AdminServices() {
                   className={inputClass}
                 />
               </div>
+
+              <div>
+                <label htmlFor="service-price" className="block text-xs font-semibold text-on-surface-variant mb-1.5 uppercase tracking-wider">
+                  Price label
+                </label>
+                <input
+                  id="service-price"
+                  type="text"
+                  value={form.price_label}
+                  onChange={e => setForm({ ...form, price_label: e.target.value })}
+                  placeholder="e.g. From £850 or Contact for Quote"
+                  className={inputClass}
+                />
+              </div>
+
+              <label className="flex items-center gap-2.5 text-sm text-on-surface cursor-pointer">
+                <input type="checkbox" checked={form.published} onChange={e => setForm({ ...form, published: e.target.checked })} className="accent-tertiary w-4 h-4" />
+                Published (visible on the Services page)
+              </label>
             </div>
 
             <div className="flex justify-end gap-2.5 pt-4 border-t border-outline-variant/30">

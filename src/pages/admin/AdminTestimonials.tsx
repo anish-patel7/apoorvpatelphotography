@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Plus, Edit3, Trash2, Star, X, CheckCircle2, Loader2, Database, AlertCircle } from 'lucide-react';
+import { Plus, Edit3, Trash2, Star, X, CheckCircle2, Loader2, AlertCircle, ArrowUp, ArrowDown } from 'lucide-react';
+import { friendlyError } from '../../lib/adminErrors';
 import { useTestimonialsAdmin } from '../../hooks/useTestimonials';
 
 export default function AdminTestimonials() {
-  const { testimonials: items, loading, create, update, remove } = useTestimonialsAdmin();
+  const { testimonials: items, loading, loadError, create, update, remove, move } = useTestimonialsAdmin();
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
@@ -58,15 +59,15 @@ export default function AdminTestimonials() {
 
       if (editing) {
         await update(editing.id, payload);
-        setSuccessMsg('Testimonial updated successfully.');
+        setSuccessMsg('Your changes have been saved.');
       } else {
         await create(payload);
-        setSuccessMsg('Testimonial created and saved to Supabase.');
+        setSuccessMsg('Testimonial added.');
       }
       setTimeout(() => setSuccessMsg(null), 4000);
       resetForm();
     } catch (err: any) {
-      setFormError(err?.message || 'Failed to save testimonial to database.');
+      setFormError(friendlyError(err, 'Save testimonial', 'Your changes could not be saved. Please try again.'));
     } finally {
       setSaving(false);
     }
@@ -79,7 +80,7 @@ export default function AdminTestimonials() {
         setSuccessMsg('Testimonial removed.');
         setTimeout(() => setSuccessMsg(null), 3000);
       } catch (err: any) {
-        alert(err?.message || 'Delete operation failed.');
+        alert(friendlyError(err, 'Delete testimonial', 'This testimonial could not be deleted. Please try again.'));
       }
     }
   };
@@ -92,7 +93,7 @@ export default function AdminTestimonials() {
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err: any) {
       console.error('Toggle approval failed:', err);
-      alert(err?.message || 'Failed to update approval status.');
+      alert(friendlyError(err, 'Approve testimonial', 'That change could not be saved. Please try again.'));
     }
   };
 
@@ -107,19 +108,14 @@ export default function AdminTestimonials() {
 
   return (
     <div className="space-y-6">
+      {loadError && <div role="alert" className="bg-error/10 border border-error/30 text-error rounded-xl p-4 text-sm">{loadError}</div>}
       {successMsg && (
-        <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-3 rounded-xl flex items-center gap-2.5 text-sm animate-in fade-in">
+        <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-3 rounded-xl flex items-center gap-2.5 text-sm">
           <CheckCircle2 size={16} className="shrink-0 text-emerald-400" />
           <span>{successMsg}</span>
         </div>
       )}
 
-      <div className="bg-surface-container-low border border-outline-variant/30 rounded-xl p-4 flex items-center justify-between gap-4 text-xs">
-        <div className="flex items-center gap-2.5 text-on-surface-variant">
-          <Database size={15} className="text-tertiary shrink-0" />
-          <span><strong>PostgreSQL Database Connected:</strong> Real-time persistence via Supabase <code className="text-tertiary font-mono">testimonials</code> table.</span>
-        </div>
-      </div>
 
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -137,7 +133,7 @@ export default function AdminTestimonials() {
       {loading && items.length === 0 ? (
         <div className="text-center py-20 text-on-surface-variant text-sm">
           <Loader2 size={24} className="animate-spin mx-auto mb-2 text-tertiary" />
-          <span>Loading testimonials from database...</span>
+          <span>Loading testimonials…</span>
         </div>
       ) : items.length === 0 ? (
         <div className="text-center py-20 px-4 bg-surface-container-low rounded-xl border border-outline-variant/30">
@@ -146,7 +142,7 @@ export default function AdminTestimonials() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {items.map(t => {
+          {items.map((t, idx) => {
             const isApproved = t.is_approved ?? t.approved ?? false;
             const reviewName = t.client_name || t.name || 'Client';
             const reviewText = t.testimonial || t.review || '';
@@ -183,13 +179,31 @@ export default function AdminTestimonials() {
                       onClick={() => handleEdit(t)}
                       className="p-1.5 rounded-md text-on-surface-variant hover:text-tertiary hover:bg-surface-container transition-colors cursor-pointer"
                       title="Edit Review"
+                      aria-label={`Edit review from ${reviewName}`}
                     >
                       <Edit3 size={15} />
+                    </button>
+                    <button
+                      onClick={() => move(t.id, -1).catch(err => alert(friendlyError(err, 'Reorder testimonials', 'The order could not be saved.')))}
+                      disabled={idx === 0}
+                      className="p-1.5 rounded-md text-on-surface-variant hover:text-tertiary disabled:opacity-30 cursor-pointer"
+                      aria-label={`Move review from ${reviewName} earlier`}
+                    >
+                      <ArrowUp size={15} />
+                    </button>
+                    <button
+                      onClick={() => move(t.id, 1).catch(err => alert(friendlyError(err, 'Reorder testimonials', 'The order could not be saved.')))}
+                      disabled={idx === items.length - 1}
+                      className="p-1.5 rounded-md text-on-surface-variant hover:text-tertiary disabled:opacity-30 cursor-pointer"
+                      aria-label={`Move review from ${reviewName} later`}
+                    >
+                      <ArrowDown size={15} />
                     </button>
                     <button
                       onClick={() => handleDelete(t.id)}
                       className="p-1.5 rounded-md text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors cursor-pointer"
                       title="Delete Review"
+                      aria-label={`Delete review from ${reviewName}`}
                     >
                       <Trash2 size={15} />
                     </button>
@@ -256,7 +270,7 @@ export default function AdminTestimonials() {
                   {saving ? (
                     <>
                       <Loader2 size={16} className="animate-spin" />
-                      <span>Saving to Database...</span>
+                      <span>Saving changes...</span>
                     </>
                   ) : (
                     <span>{editing ? 'Save Changes' : 'Create Testimonial'}</span>

@@ -225,3 +225,6 @@ create policy "Reel videos admin update" on storage.objects
 drop policy if exists "Reel videos admin delete" on storage.objects;
 create policy "Reel videos admin delete" on storage.objects
   for delete using (bucket_id = 'reel-videos' and public.is_admin());
+
+-- Tell the API layer about schema changes immediately
+notify pgrst, 'reload schema';

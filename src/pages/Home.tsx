@@ -5,6 +5,7 @@ import ServicesOverview from '../components/home/ServicesOverview';
 import FeaturedPortfolio from '../components/home/FeaturedPortfolio';
 import InstagramReels from '../components/home/InstagramReels';
 import TestimonialsSection from '../components/home/TestimonialsSection';
+import TrainingPreview from '../components/home/TrainingPreview';
 import CTASection from '../components/home/CTASection';
 
 const homeSchema = {
@@ -62,6 +63,7 @@ export default function Home() {
         <ServicesOverview />
         <FeaturedPortfolio />
         <InstagramReels />
+        <TrainingPreview />
         <TestimonialsSection />
         <CTASection />
       </main>

@@ -32,6 +32,8 @@ export default async function handler(req: any, res: any) {
     const location = (body.location || body.event_location || '').trim();
     const budget = (body.budget || '').trim();
     const message = (body.message || '').trim();
+    // Only two known sources are accepted; anything else is stored as a normal website enquiry.
+    const source = body.source === 'training' ? 'training' : 'website';
 
     // 5. Server-side validation
     if (!name || name.length < 2 || name.length > 100) {
@@ -74,7 +76,7 @@ export default async function handler(req: any, res: any) {
     if (!supabaseUrl || !supabaseKey || supabaseUrl.includes('your-project')) {
       return res.status(503).json({
         success: false,
-        error: 'Studio inquiry database is currently offline or unconfigured.',
+        error: 'Our enquiry service is temporarily unavailable. Please contact us directly via WhatsApp.',
       });
     }
 
@@ -92,7 +94,7 @@ export default async function handler(req: any, res: any) {
       p_event_location: location || null,
       p_budget: budget || null,
       p_message: message,
-      p_source: 'website',
+      p_source: source,
     });
 
     if (!rpcError && rpcData) {
@@ -148,7 +150,7 @@ export default async function handler(req: any, res: any) {
           budget: budget || null,
           message: message,
           inquiry_status: 'new',
-          source: 'website',
+          source,
         },
       ]);
 
@@ -156,7 +158,7 @@ export default async function handler(req: any, res: any) {
       console.error('[Inquiries API] Insert error:', insertError.message);
       return res.status(500).json({
         success: false,
-        error: insertError.message || 'Unable to record your inquiry. Please try again or reach out via WhatsApp.',
+        error: 'Unable to record your inquiry. Please try again or reach out via WhatsApp.',
       });
     }
 

@@ -69,9 +69,7 @@ export default function AdminLogin({ onLogin }: Props) {
             Studio Admin Portal
           </h1>
           <p className="text-on-surface-variant text-xs">
-            {isSupabaseConfigured
-              ? 'Authorized access verified via Supabase Authentication'
-              : 'Production Database Integration Mode'}
+            Sign in to manage your website
           </p>
         </div>
 
@@ -157,7 +155,7 @@ export default function AdminLogin({ onLogin }: Props) {
                 className="w-full py-2 bg-surface-container border border-tertiary/30 text-tertiary text-xs rounded-lg hover:bg-surface-container-high transition-colors flex items-center justify-center gap-1.5"
               >
                 <Sparkles size={14} />
-                <span>Enter Local Dev Preview (Offline Sandbox)</span>
+                <span>Open Local Preview</span>
               </button>
             </div>
           )}

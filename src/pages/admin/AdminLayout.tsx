@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, FolderOpen, Briefcase,
-  GraduationCap, MessageSquareQuote, LogOut, Menu, X, ChevronRight, Film, Sun, Moon,
+  GraduationCap, MessageSquareQuote, LogOut, Menu, X, ChevronRight, Film, Sun, Moon, Wrench,
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -19,9 +19,11 @@ const sidebarItems = [
 interface Props {
   children: ReactNode;
   onLogout: () => void;
+  /** Developer accounts only: link to the technical System Check page. */
+  showSystemCheck?: boolean;
 }
 
-export default function AdminLayout({ children, onLogout }: Props) {
+export default function AdminLayout({ children, onLogout, showSystemCheck = false }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { isDark, toggleTheme } = useTheme();
   const location = useLocation();
@@ -68,7 +70,7 @@ export default function AdminLayout({ children, onLogout }: Props) {
         </div>
 
         <nav className="p-3 space-y-1">
-          {sidebarItems.map(item => {
+          {[...sidebarItems, ...(showSystemCheck ? [{ to: '/admin/system', icon: Wrench, label: 'System Check' }] : [])].map(item => {
             const active = isActive(item.to);
             return (
               <Link

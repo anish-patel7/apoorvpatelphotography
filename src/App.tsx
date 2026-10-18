@@ -16,6 +16,7 @@ const Services = lazy(() => import('./pages/Services'));
 const Training = lazy(() => import('./pages/Training'));
 const About = lazy(() => import('./pages/About'));
 const Contact = lazy(() => import('./pages/Contact'));
+const NotFound = lazy(() => import('./pages/NotFound'));
 
 // Lazy-loaded Admin dashboard routes (split completely from public bundle)
 const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'));
@@ -26,6 +27,7 @@ const AdminServices = lazy(() => import('./pages/admin/AdminServices'));
 const AdminReels = lazy(() => import('./pages/admin/AdminReels'));
 const AdminTraining = lazy(() => import('./pages/admin/AdminTraining'));
 const AdminTestimonials = lazy(() => import('./pages/admin/AdminTestimonials'));
+const AdminSystem = lazy(() => import('./pages/admin/AdminSystem'));
 const AdminLogin = lazy(() => import('./pages/admin/AdminLogin'));
 
 function PageFallback() {
@@ -45,7 +47,9 @@ function AdminFallback() {
 }
 
 export default function App() {
-  const { isAuthenticated, signIn, signOut, loading } = useAuth();
+  const { isAuthenticated, signIn, signOut, loading, adminProfile } = useAuth();
+  // Technical diagnostics are for the developer account (super_admin) or local development only.
+  const isDeveloper = adminProfile?.role === 'super_admin' || import.meta.env.DEV;
 
   if (loading) {
     return (
@@ -73,7 +77,7 @@ export default function App() {
         <Route path="/admin/*" element={
           isAuthenticated ? (
             <Suspense fallback={<AdminFallback />}>
-              <AdminLayout onLogout={signOut}>
+              <AdminLayout onLogout={signOut} showSystemCheck={isDeveloper}>
                 <Routes>
                   <Route index element={<AdminDashboard />} />
                   <Route path="leads" element={<AdminLeads />} />
@@ -82,6 +86,7 @@ export default function App() {
                   <Route path="reels" element={<AdminReels />} />
                   <Route path="training" element={<AdminTraining />} />
                   <Route path="testimonials" element={<AdminTestimonials />} />
+                  {isDeveloper && <Route path="system" element={<AdminSystem />} />}
                   <Route path="*" element={<Navigate to="/admin" replace />} />
                 </Routes>
               </AdminLayout>
@@ -104,6 +109,7 @@ export default function App() {
                   <Route path="training" element={<Training />} />
                   <Route path="about" element={<About />} />
                   <Route path="contact" element={<Contact />} />
+                  <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>
             </main>

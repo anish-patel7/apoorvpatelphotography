@@ -11,6 +11,10 @@ import { isValidInstagramUrl, cleanInstagramUrl, getInstagramType } from '../../
 import { useReelsAdmin } from '../../hooks/useReels';
 import { useStorage, getStoragePathFromPublicUrl } from '../../hooks/useStorage';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
+import { friendlyError } from '../../lib/adminErrors';
+
+// The optional Instagram import needs Meta API credentials on the server; only show it once configured.
+const INSTAGRAM_IMPORT_ENABLED = import.meta.env.VITE_ENABLE_INSTAGRAM_IMPORT === 'true';
 import {
   ALLOWED_REEL_THUMBNAIL_TYPES,
   ALLOWED_REEL_VIDEO_TYPES,
@@ -265,11 +269,12 @@ export default function AdminReels() {
           : 'Could not read the video dimensions in this browser — please choose the orientation manually.',
       }));
 
-      setVideoStage(`Uploading ${formatFileSize(file.size)} video…`);
+      setVideoStage(`Uploading video (${formatFileSize(file.size)})…`);
       const { publicUrl } = await videoStorage.uploadFile(file, {
         allowedTypes: ALLOWED_REEL_VIDEO_TYPES,
         maxBytes: MAX_REEL_VIDEO_BYTES,
         folder: uploadFolder(),
+        onProgress: f => setVideoStage(`Uploading video… ${Math.round(f * 100)}%`),
       });
       sessionUploads.current.push(publicUrl);
       setForm(prev => ({ ...prev, videoUrl: publicUrl }));
@@ -284,14 +289,13 @@ export default function AdminReels() {
             const thumbUrl = await uploadThumbnailFile(thumbFile);
             setForm(prev => (prev.thumbnail.trim() ? prev : { ...prev, thumbnail: thumbUrl }));
           } catch (thumbErr) {
-            console.warn('Automatic thumbnail failed:', thumbErr);
+            friendlyError(thumbErr, 'Automatic reel thumbnail');
           }
         }
       }
     } catch (err: any) {
-      console.error('Video upload failed:', err);
       setLocalPreviewUrl(null);
-      setFormError(err?.message || 'Video upload failed. Please try again.');
+      setFormError(friendlyError(err, 'Reel video upload', 'The video could not be uploaded. Please try again.'));
     } finally {
       setVideoStage(null);
     }
@@ -314,7 +318,7 @@ export default function AdminReels() {
       const url = await uploadThumbnailFile(file);
       setForm(prev => ({ ...prev, thumbnail: url }));
     } catch (err: any) {
-      setFormError(err?.message || 'Thumbnail upload failed.');
+      setFormError(friendlyError(err, 'Reel thumbnail upload', 'The image could not be uploaded. Please try again.'));
     }
   };
 
@@ -392,18 +396,17 @@ export default function AdminReels() {
         // Remove files this entry no longer uses.
         if (editing.video_url && editing.video_url !== finalVideoUrl) await deleteStoredFile(editing.video_url, editing.id);
         if (editing.thumbnail_url && editing.thumbnail_url !== finalThumbnail) await deleteStoredFile(editing.thumbnail_url, editing.id);
-        setNotice({ type: 'success', text: `"${finalTitle}" updated.` });
+        setNotice({ type: 'success', text: 'Your changes have been saved.' });
       } else {
         await create(payload);
-        setNotice({ type: 'success', text: form.published ? `"${finalTitle}" published to the website.` : `"${finalTitle}" saved as a draft.` });
+        setNotice({ type: 'success', text: form.published ? 'Reel published successfully.' : 'Reel saved as a draft.' });
       }
       await discardSessionUploads([finalVideoUrl || '', finalThumbnail]);
       setShowForm(false);
       setEditing(null);
       setLocalPreviewUrl(null);
     } catch (err: any) {
-      console.error('Reel save failed:', err);
-      setFormError(err?.message || 'Failed to save to the database.');
+      setFormError(friendlyError(err, 'Save reel', 'Your reel could not be saved. Please try again.'));
     } finally {
       setSaving(false);
     }
@@ -418,7 +421,7 @@ export default function AdminReels() {
       await action();
       setNotice({ type: 'success', text: success });
     } catch (err: any) {
-      setNotice({ type: 'error', text: err?.message || 'Update failed.' });
+      setNotice({ type: 'error', text: friendlyError(err, 'Reel quick action', 'That change could not be saved. Please try again.') });
     } finally {
       setBusyId(null);
     }
@@ -433,7 +436,7 @@ export default function AdminReels() {
   const togglePublished = (reel: InstagramReel) => {
     const publish = reel.status !== 'configured';
     return runQuickAction(reel.id, () => update(reel.id, { status: publish ? 'configured' : 'incomplete' }),
-      publish ? `"${reel.title}" is now live.` : `"${reel.title}" moved to drafts (hidden from visitors).`);
+      publish ? 'Reel published successfully.' : 'Reel hidden from the website (saved as a draft).');
   };
 
   const moveReel = (reel: InstagramReel, direction: -1 | 1) =>
@@ -444,10 +447,10 @@ export default function AdminReels() {
     setDeleting(true);
     try {
       await remove(confirmDelete.id);
-      setNotice({ type: 'success', text: `"${confirmDelete.title}" deleted.` });
+      setNotice({ type: 'success', text: 'Reel deleted.' });
       setConfirmDelete(null);
     } catch (err: any) {
-      setNotice({ type: 'error', text: err?.message || 'Delete failed.' });
+      setNotice({ type: 'error', text: friendlyError(err, 'Delete reel', 'The reel could not be deleted. Please try again.') });
     } finally {
       setDeleting(false);
     }
@@ -459,12 +462,10 @@ export default function AdminReels() {
     try {
       const { data } = await supabase.auth.getSession();
       const token = data.session?.access_token;
-      if (!token) throw new Error('Your admin session has expired. Please sign in again.');
+      if (!token) throw new Error('Session expired');
       const res = await fetch('/api/instagram-sync', { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
       const body = await res.json().catch(() => null);
-      if (res.status === 404) throw new Error('The sync endpoint is only available on the Vercel deployment.');
-      if (res.status === 501) throw new Error(body?.error || 'Instagram sync is not configured. Add the Meta API credentials in Vercel first.');
-      if (!res.ok || !body?.success) throw new Error(body?.error || `Sync failed (HTTP ${res.status}).`);
+      if (!res.ok || !body?.success) throw Object.assign(new Error(body?.error || `Instagram import failed (HTTP ${res.status})`), { status: res.status });
       await refetch();
       setNotice({
         type: 'success',
@@ -473,14 +474,14 @@ export default function AdminReels() {
           : 'No new reels found on Instagram.',
       });
     } catch (err: any) {
-      setNotice({ type: 'error', text: err?.message || 'Instagram sync failed.' });
+      setNotice({ type: 'error', text: friendlyError(err, 'Instagram import', 'Importing from Instagram is not available right now. You can still add reels by pasting their links.') });
     } finally {
       setSyncing(false);
     }
   };
 
-  const inputClass = 'w-full bg-surface-container-lowest border border-outline-variant/40 rounded-lg px-3.5 py-2.5 text-sm text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none focus:border-tertiary focus:ring-1 focus:ring-tertiary/40 transition-colors';
-  const labelBase = 'block text-xs font-semibold text-on-surface-variant uppercase tracking-wider';
+  const inputClass = 'w-full bg-surface-container-lowest border border-outline-variant/40 rounded-lg px-3.5 py-3 sm:py-2.5 text-base sm:text-sm text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none focus:border-tertiary focus:ring-1 focus:ring-tertiary/40 transition-colors';
+  const labelBase = 'block text-sm sm:text-xs font-semibold text-on-surface-variant uppercase tracking-wider';
   const labelClass = `${labelBase} mb-1.5`;
   const previewVideoSrc = localPreviewUrl || form.videoUrl;
 
@@ -503,7 +504,7 @@ export default function AdminReels() {
       {!isSupabaseConfigured && (
         <div className="bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 rounded-xl p-4 text-xs flex items-start gap-2.5">
           <AlertTriangle size={15} className="shrink-0 mt-0.5" />
-          <span>Supabase is not configured (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY), so changes cannot be saved.</span>
+          <span>Saving is not available in this preview.</span>
         </div>
       )}
 
@@ -525,14 +526,16 @@ export default function AdminReels() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {INSTAGRAM_IMPORT_ENABLED && (
           <button
             onClick={handleInstagramSync}
             disabled={syncing || !isSupabaseConfigured}
             className="flex items-center gap-2 px-3.5 py-2.5 border border-outline-variant/40 text-on-surface text-sm font-semibold rounded-lg hover:border-tertiary/60 hover:text-tertiary transition-colors cursor-pointer disabled:opacity-50"
-            title="Import new reels from Instagram as drafts (requires Meta API setup)"
+            title="Bring in your newest Instagram reels as drafts"
           >
             {syncing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />} Import from Instagram
           </button>
+          )}
           <button
             onClick={openCreate}
             className="flex items-center gap-2 px-4 py-2.5 bg-tertiary text-on-tertiary text-sm font-semibold rounded-lg hover:bg-tertiary-fixed transition-colors shadow-xs cursor-pointer"
@@ -569,7 +572,7 @@ export default function AdminReels() {
       {loading ? (
         <div className="text-center py-20 text-on-surface-variant text-sm">
           <Loader2 size={24} className="animate-spin mx-auto mb-2 text-tertiary" />
-          <span>Loading reels from database...</span>
+          <span>Loading reels…</span>
         </div>
       ) : visibleReels.length === 0 ? (
         <div className="text-center py-20 px-4 bg-surface-container-low rounded-xl border border-outline-variant/30">
@@ -686,8 +689,8 @@ export default function AdminReels() {
 
       {/* Add / Edit form */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-start sm:items-center justify-center p-4 z-50 overflow-y-auto" onClick={() => void closeForm()}>
-          <div role="dialog" aria-modal="true" aria-labelledby="reel-form-title" className="bg-surface-container-low rounded-2xl max-w-xl w-full p-5 sm:p-6 border border-outline-variant/30 space-y-5 my-8 shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-start sm:items-center justify-center p-0 sm:p-4 z-50 overflow-y-auto" onClick={() => void closeForm()}>
+          <div role="dialog" aria-modal="true" aria-labelledby="reel-form-title" className="bg-surface-container-low sm:rounded-2xl max-w-xl w-full min-h-full sm:min-h-0 px-4 pt-5 pb-0 sm:p-6 border-0 sm:border border-outline-variant/30 space-y-5 sm:my-8 shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between pb-3 border-b border-outline-variant/30">
               <div>
                 <h3 id="reel-form-title" className="font-display text-lg font-bold text-on-surface">{editing ? 'Edit Reel / Video' : 'Add Reel / Video'}</h3>
@@ -742,7 +745,7 @@ export default function AdminReels() {
                     <p className="text-[11px] text-tertiary font-semibold flex items-center gap-1.5"><Loader2 size={12} className="animate-spin" /> {videoStage}</p>
                   )}
                   {!videoStage && form.videoUrl && (
-                    <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1.5"><CheckCircle2 size={12} /> Video stored in Supabase Storage</p>
+                    <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1.5"><CheckCircle2 size={12} /> Video uploaded</p>
                   )}
                   {videoWarning && (
                     <p className="text-[11px] text-amber-700 dark:text-amber-400 flex items-start gap-1.5"><Info size={12} className="shrink-0 mt-0.5" /> {videoWarning}</p>
@@ -893,17 +896,17 @@ export default function AdminReels() {
               </div>
             </div>
 
-            <div className="flex justify-end gap-2.5 pt-4 border-t border-outline-variant/30">
-              <button type="button" onClick={() => void closeForm()} disabled={saving || Boolean(videoStage)} className="px-4 py-2 rounded-lg border border-outline-variant/40 text-on-surface-variant hover:text-on-surface text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50">
+            <div className="sticky bottom-0 -mx-4 sm:mx-0 px-4 sm:px-0 py-3 sm:py-0 sm:pt-4 bg-surface-container-low flex justify-end gap-2.5 border-t border-outline-variant/30">
+              <button type="button" onClick={() => void closeForm()} disabled={saving || Boolean(videoStage)} className="flex-1 sm:flex-none px-4 py-3 sm:py-2 rounded-lg border border-outline-variant/40 text-on-surface-variant hover:text-on-surface text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50">
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleSave}
                 disabled={saving || uploadingAnything || !instagramUrlValid}
-                className="px-5 py-2 rounded-lg bg-tertiary text-on-tertiary text-xs font-semibold hover:bg-tertiary-fixed transition-colors shadow-xs cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                className="flex-1 sm:flex-none justify-center px-5 py-3 sm:py-2 rounded-lg bg-tertiary text-on-tertiary text-sm sm:text-xs font-semibold hover:bg-tertiary-fixed transition-colors shadow-xs cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
               >
-                {saving ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : editing ? 'Save changes' : form.published ? 'Save & publish' : 'Save draft'}
+                {saving ? <><Loader2 size={14} className="animate-spin" /> Saving changes...</> : editing ? 'Save changes' : form.published ? 'Save & publish' : 'Save draft'}
               </button>
             </div>
           </div>

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import SEO from '../components/common/SEO';
 import { useTraining } from '../hooks/useTraining';
@@ -18,7 +19,8 @@ const trainingBreadcrumbs = {
 };
 
 export default function Training() {
-  const { courses, loading } = useTraining();
+  const { courses, loading, error } = useTraining();
+  const [openId, setOpenId] = useState<string | null>(null);
 
   return (
     <main className="pt-[104px]">
@@ -52,8 +54,10 @@ export default function Training() {
           <div className="lg:col-span-5 relative mt-12 lg:mt-0">
             <div className="aspect-[4/5] bg-surface-container-low relative overflow-hidden rounded-sm group border border-outline-variant/10">
               <img
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuB0d7X7IzRLbYuXos-Em8M1dRxRMF8UIGoFjQwkAD1RzHSltPrPVFAi34wjh26D8GtT8bNkZWA4iAAE7ASF6ZLhR56Jqu1-8_DUVF6zBvasPyuGq5XkaOKGslBoyie6cvkU9nPp9dT7zI3XA4zxc6LxMLi9QfLGHOrvV2bd8Ji1SUcyHfRxZLVzwvBjVUtdzKrGTHb9PHYDbWP2lAuLDKOC5eoyr6Nab-uNNOpbnyfgpZVHmyOfhpUA"
-                alt="Professional camera setup"
+                src="/images/portfolio/wedding-collection/photo_04.webp"
+                alt="Candid haldi ceremony close-up photographed by Apoorv Patel"
+                loading="lazy"
+                decoding="async"
                 className="object-cover w-full h-full transform group-hover:scale-105 transition-transform duration-[2s] ease-out opacity-80 group-hover:opacity-100"
               />
             </div>
@@ -91,6 +95,10 @@ export default function Training() {
           <div className="text-center py-20">
             <p className="text-on-surface-variant">Loading courses...</p>
           </div>
+        ) : error ? (
+          <div className="text-center py-20" role="alert">
+            <p className="text-on-surface-variant text-lg">{error}</p>
+          </div>
         ) : courses.length === 0 ? (
           <div className="text-center py-20">
             <p className="text-on-surface-variant text-lg">Training courses will be announced soon.</p>
@@ -103,6 +111,8 @@ export default function Training() {
                   <img
                     src={course.image}
                     alt={course.title}
+                    loading="lazy"
+                    decoding="async"
                     className="object-cover w-full h-full transform group-hover:scale-105 transition-transform duration-[1.5s] ease-out opacity-70 group-hover:opacity-100"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent opacity-80" />
@@ -116,12 +126,38 @@ export default function Training() {
                 <div className="p-6 sm:p-8">
                   <h3 className="font-display text-[22px] sm:text-[32px] text-on-background mb-3 leading-tight">{course.title}</h3>
                   <p className="font-body text-[15px] sm:text-[16px] text-on-surface-variant mb-6 sm:mb-8 line-clamp-2 leading-relaxed">{course.description}</p>
+                  {openId === course.id && (
+                    <div id={`course-details-${course.id}`} className="mb-6 space-y-4 text-[15px] text-on-surface-variant border-t border-outline-variant/20 pt-5">
+                      <p>{course.description}</p>
+                      <dl className="grid grid-cols-2 gap-3 text-sm">
+                        {course.duration && <div><dt className="text-[11px] uppercase tracking-wider text-tertiary font-semibold">Duration</dt><dd>{course.duration}</dd></div>}
+                        {course.mode && <div><dt className="text-[11px] uppercase tracking-wider text-tertiary font-semibold">Mode</dt><dd>{course.mode}</dd></div>}
+                        {course.level && <div><dt className="text-[11px] uppercase tracking-wider text-tertiary font-semibold">Level</dt><dd>{course.level}</dd></div>}
+                        {course.fee && <div><dt className="text-[11px] uppercase tracking-wider text-tertiary font-semibold">Fee</dt><dd>{course.fee}</dd></div>}
+                      </dl>
+                      {course.curriculum.length > 0 && (
+                        <div>
+                          <p className="text-[11px] uppercase tracking-wider text-tertiary font-semibold mb-2">What you'll learn</p>
+                          <ul className="list-disc pl-5 space-y-1">{course.curriculum.map(item => <li key={item}>{item}</li>)}</ul>
+                        </div>
+                      )}
+                      {course.tools.length > 0 && (
+                        <p><span className="text-[11px] uppercase tracking-wider text-tertiary font-semibold">Tools: </span>{course.tools.join(', ')}</p>
+                      )}
+                    </div>
+                  )}
                   <div className="flex items-center gap-4">
-                    <Link to="/contact" className="bg-on-background text-background font-body text-[14px] font-semibold tracking-[0.05em] px-6 py-3 btn-cinematic hover:bg-tertiary hover:text-on-tertiary rounded-sm flex-1 text-center">
+                    <Link to={`/contact?service=${encodeURIComponent('Training')}&course=${encodeURIComponent(course.title)}`} className="bg-on-background text-background font-body text-[14px] font-semibold tracking-[0.05em] px-6 py-3 btn-cinematic hover:bg-tertiary hover:text-on-tertiary rounded-sm flex-1 text-center">
                       Enquire
                     </Link>
-                    <button className="border border-outline-variant/30 text-on-background font-body text-[14px] font-semibold tracking-[0.05em] px-6 py-3 btn-cinematic hover:bg-surface-variant rounded-sm flex-1 text-center">
-                      View Details
+                    <button
+                      type="button"
+                      onClick={() => setOpenId(id => (id === course.id ? null : course.id))}
+                      aria-expanded={openId === course.id}
+                      aria-controls={`course-details-${course.id}`}
+                      className="border border-outline-variant/30 text-on-background font-body text-[14px] font-semibold tracking-[0.05em] px-6 py-3 btn-cinematic hover:bg-surface-variant rounded-sm flex-1 text-center cursor-pointer"
+                    >
+                      {openId === course.id ? 'Hide Details' : 'View Details'}
                     </button>
                   </div>
                 </div>
