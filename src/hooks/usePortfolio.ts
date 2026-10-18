@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { portfolioProjects } from '../data/portfolio';
 
@@ -93,54 +93,115 @@ function mapDbProject(row: any): Project {
   };
 }
 
+// Supabase/PostgREST returns at most 1000 rows per request by default, so page through results.
+const PAGE_SIZE = 1000;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function fetchAllPages<T>(buildQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: any }>): Promise<T[]> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    rows.push(...(data || []));
+    if (!data || data.length < PAGE_SIZE) return rows;
+  }
+}
+
+/** Loads gallery photos from portfolio_images and attaches them to each project (cover first). */
+async function attachGalleryImages(rows: any[]): Promise<Project[]> {
+  const projects = rows.map(mapDbProject);
+  if (projects.length === 0) return projects;
+
+  const ids = projects.map(p => p.id);
+  const imageRows = await fetchAllPages<{ project_id: string; image_url: string }>((from, to) =>
+    supabase
+      .from('portfolio_images')
+      .select('project_id, image_url, display_order')
+      .in('project_id', ids)
+      .order('display_order', { ascending: true })
+      .order('created_at', { ascending: true })
+      .range(from, to) as any
+  );
+
+  const byProject = new Map<string, string[]>();
+  for (const row of imageRows) {
+    if (!row.image_url) continue;
+    const list = byProject.get(row.project_id) ?? [];
+    if (!list.includes(row.image_url)) list.push(row.image_url);
+    byProject.set(row.project_id, list);
+  }
+
+  return projects.map(p => {
+    const gallery = byProject.get(p.id) ?? [];
+    const images = p.cover_image && !gallery.includes(p.cover_image) ? [p.cover_image, ...gallery] : gallery;
+    return { ...p, images: images.length > 0 ? images : [p.cover_image].filter(Boolean) };
+  });
+}
+
+/** Single source for public portfolio data: every published project with its gallery. */
+async function fetchPublishedProjects(): Promise<Project[]> {
+  if (!isSupabaseConfigured) return fallbackProjects;
+  const rows = await fetchAllPages<any>((from, to) =>
+    supabase
+      .from('portfolio_projects')
+      .select('*')
+      .eq('is_published', true)
+      .order('display_order', { ascending: true })
+      .order('created_at', { ascending: false })
+      .range(from, to) as any
+  );
+  return attachGalleryImages(rows);
+}
+
+export function filterProjectsByCategory(projects: Project[], category?: string): Project[] {
+  if (!category || category === 'All') return projects;
+  const wanted = category.trim().toLowerCase();
+  return projects.filter(p => (p.category || '').trim().toLowerCase() === wanted);
+}
+
+function describeError(err: any): string {
+  return err?.message || String(err) || 'Unknown error';
+}
+
+/**
+ * Public portfolio hook. Fetches ALL published projects once; category views are
+ * derived from that same list, so "All" always contains every category's items.
+ * Refreshes when the visitor returns to the tab.
+ */
 export function usePortfolio(category?: string) {
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [allProjects, setAllProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const requestId = useRef(0);
 
-  const fetch = useCallback(async () => {
-    setLoading(true);
-    if (!isSupabaseConfigured) {
-      let filtered = fallbackProjects;
-      if (category && category !== 'All') {
-        filtered = filtered.filter(p => p.category.toLowerCase() === category.toLowerCase());
-      }
-      setProjects(filtered);
-      setLoading(false);
-      return;
-    }
-
+  const load = useCallback(async () => {
+    const id = ++requestId.current;
     try {
-      let query = supabase
-        .from('portfolio_projects')
-        .select('*')
-        .eq('is_published', true)
-        .order('display_order', { ascending: true })
-        .order('created_at', { ascending: false });
-
-      if (category && category !== 'All') {
-        query = query.eq('category', category);
-      }
-
-      const { data, error } = await query;
-      if (error || !data || data.length === 0) {
-        let filtered = fallbackProjects;
-        if (category && category !== 'All') {
-          filtered = filtered.filter(p => p.category.toLowerCase() === category.toLowerCase());
-        }
-        setProjects(filtered);
-      } else {
-        setProjects(data.map(mapDbProject));
-      }
-    } catch {
-      setProjects(fallbackProjects);
+      const data = await fetchPublishedProjects();
+      if (id !== requestId.current) return; // a newer request superseded this one
+      setAllProjects(data);
+      setError(null);
+    } catch (err) {
+      if (id !== requestId.current) return;
+      console.error('Portfolio fetch error:', describeError(err));
+      setError('The portfolio could not be loaded. Please refresh the page or try again shortly.');
     } finally {
-      setLoading(false);
+      if (id === requestId.current) setLoading(false);
     }
-  }, [category]);
+  }, []);
 
-  useEffect(() => { fetch(); }, [fetch]);
+  useEffect(() => {
+    void load();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void load();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [load]);
 
-  return { projects, loading, refetch: fetch };
+  const projects = useMemo(() => filterProjectsByCategory(allProjects, category), [allProjects, category]);
+
+  return { projects, allProjects, loading, error, refetch: load };
 }
 
 export function usePortfolioProject(slug: string) {
@@ -148,47 +209,34 @@ export function usePortfolioProject(slug: string) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!isSupabaseConfigured) {
-      const match = fallbackProjects.find(p => p.slug === slug || p.id === slug) ?? null;
-      setProject(match);
-      setLoading(false);
-      return;
-    }
+    let cancelled = false;
 
-    supabase
-      .from('portfolio_projects')
-      .select('*')
-      .or(`slug.eq.${slug},id.eq.${slug}`)
-      .single()
-      .then(
-        async ({ data, error }) => {
-          if (error || !data) {
-            const match = fallbackProjects.find(p => p.slug === slug || p.id === slug) ?? null;
-            setProject(match);
-          } else {
-            const mapped = mapDbProject(data);
-            try {
-              const { data: imgRows } = await supabase
-                .from('portfolio_images')
-                .select('image_url')
-                .eq('project_id', data.id)
-                .order('display_order', { ascending: true });
-              if (imgRows && imgRows.length > 0) {
-                mapped.images = imgRows.map(r => r.image_url);
-              }
-            } catch {
-              // fallback to mapped images
-            }
-            setProject(mapped);
-          }
-          setLoading(false);
-        },
-        () => {
-          const match = fallbackProjects.find(p => p.slug === slug || p.id === slug) ?? null;
-          setProject(match);
+    (async () => {
+      if (!isSupabaseConfigured) {
+        await Promise.resolve();
+        if (!cancelled) {
+          setProject(fallbackProjects.find(p => p.slug === slug || p.id === slug) ?? null);
           setLoading(false);
         }
-      );
+        return;
+      }
+
+      try {
+        // Links use either the uuid id or the slug; only query the id column with a valid uuid.
+        const base = supabase.from('portfolio_projects').select('*');
+        const { data, error } = await (UUID_RE.test(slug) ? base.eq('id', slug) : base.eq('slug', slug)).maybeSingle();
+        if (error) throw error;
+        const mapped = data ? (await attachGalleryImages([data]))[0] : null;
+        if (!cancelled) setProject(mapped);
+      } catch (err) {
+        console.error(`Portfolio project fetch error (${slug}):`, describeError(err));
+        if (!cancelled) setProject(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
   }, [slug]);
 
   return { project, loading };
@@ -197,80 +245,102 @@ export function usePortfolioProject(slug: string) {
 export function useFeaturedPortfolio() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isSupabaseConfigured) {
-      setProjects(fallbackProjects.filter(p => p.featured));
-      setLoading(false);
-      return;
-    }
+    let cancelled = false;
 
-    supabase
-      .from('portfolio_projects')
-      .select('*')
-      .eq('is_published', true)
-      .eq('is_featured', true)
-      .order('display_order', { ascending: true })
-      .limit(6)
-      .then(
-        ({ data, error }) => {
-          if (error || !data || data.length === 0) {
-            setProjects(fallbackProjects.filter(p => p.featured));
-          } else {
-            setProjects(data.map(mapDbProject));
-          }
-          setLoading(false);
-        },
-        () => {
-          setProjects(fallbackProjects.filter(p => p.featured));
-          setLoading(false);
+    (async () => {
+      try {
+        if (!isSupabaseConfigured) {
+          await Promise.resolve();
+          if (!cancelled) setProjects(fallbackProjects.filter(p => p.featured));
+          return;
         }
-      );
+        const { data, error: queryError } = await supabase
+          .from('portfolio_projects')
+          .select('*')
+          .eq('is_published', true)
+          .eq('is_featured', true)
+          .order('display_order', { ascending: true })
+          .order('created_at', { ascending: false })
+          .limit(6);
+        if (queryError) throw queryError;
+        if (!cancelled) {
+          setProjects((data || []).map(mapDbProject));
+          setError(null);
+        }
+      } catch (err) {
+        console.error('Featured portfolio fetch error:', describeError(err));
+        if (!cancelled) {
+          setProjects([]);
+          setError('Featured work could not be loaded.');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
   }, []);
 
-  return { projects, loading };
+  return { projects, loading, error };
 }
+
+/** Replaces a project's gallery rows in portfolio_images with `images` (in order). */
+async function replaceGalleryImages(projectId: string, images: string[], title: string) {
+  const unique = Array.from(new Set(images.map(u => u.trim()).filter(Boolean)));
+  const { error: deleteError } = await supabase.from('portfolio_images').delete().eq('project_id', projectId);
+  if (deleteError) throw deleteError;
+  if (unique.length === 0) return;
+  const rows = unique.map((image_url, i) => ({
+    project_id: projectId,
+    image_url,
+    alt_text: `${title} - Photograph ${i + 1}`,
+    display_order: i + 1,
+  }));
+  const { error: insertError } = await supabase.from('portfolio_images').insert(rows as any);
+  if (insertError) throw insertError;
+}
+
+const NOT_CONFIGURED_ERROR = 'Supabase is not configured (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY), so portfolio changes cannot be saved.';
 
 export function usePortfolioAdmin() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetch = useCallback(async () => {
-    setLoading(true);
     if (!isSupabaseConfigured) {
+      await Promise.resolve();
       setProjects(fallbackProjects);
       setLoading(false);
       return;
     }
 
-    const { data, error } = await supabase
-      .from('portfolio_projects')
-      .select('*')
-      .order('display_order', { ascending: true })
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Portfolio admin fetch error:', error.message);
-      setProjects(fallbackProjects);
-    } else {
-      setProjects((data || []).map(mapDbProject));
+    try {
+      const rows = await fetchAllPages<any>((from, to) =>
+        supabase
+          .from('portfolio_projects')
+          .select('*')
+          .order('display_order', { ascending: true })
+          .order('created_at', { ascending: false })
+          .range(from, to) as any
+      );
+      setProjects(await attachGalleryImages(rows));
+      setError(null);
+    } catch (err) {
+      console.error('Portfolio admin fetch error:', describeError(err));
+      setError(`Could not load portfolio projects: ${describeError(err)}`);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
-  useEffect(() => { fetch(); }, [fetch]);
+  useEffect(() => { void fetch(); }, [fetch]);
 
   const create = async (projectData: Partial<Project>) => {
-    if (!isSupabaseConfigured) {
-      const newProj = {
-        ...projectData,
-        id: `proj-${Date.now()}`,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      } as Project;
-      setProjects(prev => [newProj, ...prev]);
-      return newProj;
-    }
+    if (!isSupabaseConfigured) throw new Error(NOT_CONFIGURED_ERROR);
 
     const dbPayload = {
       slug: projectData.slug || `project-${Date.now()}`,
@@ -294,22 +364,29 @@ export function usePortfolioAdmin() {
       orientation: projectData.orientation || null,
     };
 
-    const { data, error } = await supabase
+    let { data, error: insertError } = await supabase
       .from('portfolio_projects')
       .insert([dbPayload as any])
       .select()
       .single();
 
-    if (error) throw error;
+    // Slug already taken (e.g. two projects with the same title): retry once with a unique suffix.
+    if (insertError && (insertError as any).code === '23505' && /slug/i.test(insertError.message)) {
+      dbPayload.slug = `${dbPayload.slug}-${Date.now().toString(36)}`;
+      ({ data, error: insertError } = await supabase.from('portfolio_projects').insert([dbPayload as any]).select().single());
+    }
+    if (insertError) throw insertError;
+
+    const created = data as any;
+    if (created?.id && projectData.images) {
+      await replaceGalleryImages(created.id, projectData.images, dbPayload.title);
+    }
     await fetch();
-    return data ? mapDbProject(data) : null;
+    return created ? mapDbProject(created) : null;
   };
 
   const update = async (id: string, updates: Partial<Project>) => {
-    if (!isSupabaseConfigured) {
-      setProjects(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
-      return;
-    }
+    if (!isSupabaseConfigured) throw new Error(NOT_CONFIGURED_ERROR);
 
     const dbUpdates: Record<string, unknown> = {};
     if (updates.title !== undefined) dbUpdates.title = updates.title;
@@ -340,29 +417,36 @@ export function usePortfolioAdmin() {
     if (updates.aspect_ratio !== undefined) dbUpdates.aspect_ratio = updates.aspect_ratio ? Number(updates.aspect_ratio) : null;
     if (updates.orientation !== undefined) dbUpdates.orientation = updates.orientation || null;
 
-    const { error } = await (supabase
-      .from('portfolio_projects')
-      .update as any)(dbUpdates)
-      .eq('id', id);
+    if (Object.keys(dbUpdates).length > 0) {
+      const { data, error: updateError } = await (supabase
+        .from('portfolio_projects')
+        .update as any)(dbUpdates)
+        .eq('id', id)
+        .select('id');
 
-    if (error) throw error;
+      if (updateError) throw updateError;
+      if (!data || data.length === 0) {
+        throw new Error('No project was updated. It may have been deleted, or your account lacks admin permission.');
+      }
+    }
+    if (updates.images !== undefined) {
+      await replaceGalleryImages(id, updates.images, updates.title || '');
+    }
     await fetch();
   };
 
   const remove = async (id: string) => {
-    if (!isSupabaseConfigured) {
-      setProjects(prev => prev.filter(p => p.id !== id));
-      return;
-    }
+    if (!isSupabaseConfigured) throw new Error(NOT_CONFIGURED_ERROR);
 
-    const { error } = await supabase
+    // portfolio_images rows are removed by ON DELETE CASCADE.
+    const { error: deleteError } = await supabase
       .from('portfolio_projects')
       .delete()
       .eq('id', id);
 
-    if (error) throw error;
+    if (deleteError) throw deleteError;
     await fetch();
   };
 
-  return { projects, loading, create, update, remove, refetch: fetch };
+  return { projects, loading, error, create, update, remove, refetch: fetch };
 }

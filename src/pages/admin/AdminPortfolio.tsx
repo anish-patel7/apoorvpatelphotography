@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Plus, Edit3, Trash2, Star, X, AlertTriangle, Upload, Loader2, Database, CheckCircle2, Image as ImageIcon, Camera, Sparkles } from 'lucide-react';
+import { Plus, Edit3, Trash2, Star, X, AlertTriangle, Upload, Loader2, Database, CheckCircle2, Image as ImageIcon, Camera, Sparkles, Eye, EyeOff } from 'lucide-react';
 import InstagramIcon from '../../components/icons/InstagramIcon';
 import { portfolioCategories } from '../../data/portfolio';
 import { isValidInstagramUrl, cleanInstagramUrl } from '../../utils/instagram';
 import { usePortfolioAdmin, type Project } from '../../hooks/usePortfolio';
 import { useStorage } from '../../hooks/useStorage';
+import { isSupabaseConfigured } from '../../lib/supabase';
 import type { InstagramContentType } from '../../types';
 import {
   detectVideoDimensions,
@@ -13,8 +14,9 @@ import {
 } from '../../utils/videoOrientation';
 
 export default function AdminPortfolio() {
-  const { projects, loading, create, update, remove } = usePortfolioAdmin();
-  const { upload, uploading } = useStorage('portfolio-images');
+  const { projects, loading, error: loadError, create, update, remove } = usePortfolioAdmin();
+  const { upload, uploadFile, uploading } = useStorage('portfolio-images');
+  const [galleryUploading, setGalleryUploading] = useState(false);
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Project | null>(null);
@@ -32,6 +34,9 @@ export default function AdminPortfolio() {
     instagramUrl: string;
     description: string;
     featured: boolean;
+    published: boolean;
+    /** Additional gallery photos (saved to portfolio_images after the cover). */
+    gallery: string[];
     video_width: number | null;
     video_height: number | null;
     aspect_ratio: number | null;
@@ -44,6 +49,8 @@ export default function AdminPortfolio() {
     instagramUrl: '',
     description: '',
     featured: false,
+    published: true,
+    gallery: [],
     video_width: null,
     video_height: null,
     aspect_ratio: null,
@@ -64,6 +71,8 @@ export default function AdminPortfolio() {
       instagramUrl: p.instagram_url || p.video_url || p.reel_url || '',
       description: p.description || '',
       featured: p.is_featured ?? p.featured ?? false,
+      published: p.is_published ?? true,
+      gallery: (p.images || []).filter(url => url && url !== (p.cover_image || p.cover_image_url)),
       video_width: p.video_width || null,
       video_height: p.video_height || null,
       aspect_ratio: p.aspect_ratio || null,
@@ -126,6 +135,29 @@ export default function AdminPortfolio() {
     }
   };
 
+  /** Uploads one or more additional gallery photos for this project. */
+  const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (files.length === 0) return;
+    setFormError(null);
+    setGalleryUploading(true);
+    const failures: string[] = [];
+    for (const file of files) {
+      try {
+        const { publicUrl } = await uploadFile(file, {
+          allowedTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/avif'],
+          maxBytes: 10 * 1024 * 1024,
+        });
+        setForm(prev => ({ ...prev, gallery: prev.gallery.includes(publicUrl) ? prev.gallery : [...prev.gallery, publicUrl] }));
+      } catch (err: any) {
+        failures.push(`${file.name}: ${err?.message || 'upload failed'}`);
+      }
+    }
+    setGalleryUploading(false);
+    if (failures.length > 0) setFormError(`Some photos were not uploaded — ${failures.join('; ')}`);
+  };
+
   const handleSave = async () => {
     setFormError(null);
 
@@ -166,7 +198,13 @@ export default function AdminPortfolio() {
     const cleanedInsta = form.instagramUrl.trim() ? cleanInstagramUrl(form.instagramUrl.trim()) : null;
     const isReel = cleanedInsta ? cleanedInsta.includes('/reel/') : false;
     const finalContentType: InstagramContentType = cleanedInsta ? (isReel ? 'reel' : 'post') : 'photo';
-    const autoSlug = form.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'portfolio-project';
+    const baseSlug = form.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'portfolio-project';
+    // Slugs must be unique; add a numeric suffix when another project already uses it.
+    const takenSlugs = new Set(projects.filter(p => p.id !== editing?.id).map(p => p.slug));
+    let autoSlug = baseSlug;
+    for (let n = 2; takenSlugs.has(autoSlug); n++) autoSlug = `${baseSlug}-${n}`;
+    const coverUrl = form.coverImage.trim();
+    const galleryImages = Array.from(new Set([coverUrl, ...form.gallery].filter(Boolean)));
 
     setSaving(true);
     try {
@@ -176,7 +214,7 @@ export default function AdminPortfolio() {
         category: form.category,
         cover_image: form.coverImage.trim(),
         cover_image_url: form.coverImage.trim(),
-        images: [form.coverImage.trim()],
+        images: galleryImages,
         instagram_url: cleanedInsta,
         video_url: isReel ? cleanedInsta : null,
         reel_url: isReel ? cleanedInsta : null,
@@ -188,7 +226,7 @@ export default function AdminPortfolio() {
         featured: form.featured,
         is_featured: form.featured,
         is_real_work: true,
-        is_published: true,
+        is_published: form.published,
         video_width: form.video_width ?? undefined,
         video_height: form.video_height ?? undefined,
         aspect_ratio: form.aspect_ratio ?? undefined,
@@ -200,7 +238,7 @@ export default function AdminPortfolio() {
         setSuccessMsg('Portfolio project updated successfully.');
       } else {
         await create(payload);
-        setSuccessMsg('New portfolio project created and published live to website.');
+        setSuccessMsg(form.published ? 'New portfolio project created and published live to website.' : 'New portfolio project saved as a draft (hidden from the public site).');
       }
       setTimeout(() => setSuccessMsg(null), 4000);
       resetForm();
@@ -238,6 +276,18 @@ export default function AdminPortfolio() {
     }
   };
 
+  const togglePublished = async (p: Project) => {
+    try {
+      const next = !(p.is_published ?? true);
+      await update(p.id, { is_published: next });
+      setSuccessMsg(next ? 'Project published to the website.' : 'Project unpublished (hidden from the public site).');
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } catch (err: any) {
+      console.error('Toggle published failed:', err);
+      alert(err?.message || 'Failed to update publication status.');
+    }
+  };
+
   const resetForm = () => {
     setShowForm(false);
     setEditing(null);
@@ -250,6 +300,8 @@ export default function AdminPortfolio() {
       instagramUrl: '',
       description: '',
       featured: false,
+      published: true,
+      gallery: [],
       video_width: null,
       video_height: null,
       aspect_ratio: null,
@@ -265,19 +317,34 @@ export default function AdminPortfolio() {
     <div className="space-y-6">
       {/* Success Notification Banner */}
       {successMsg && (
-        <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 px-4 py-3 rounded-xl flex items-center gap-2.5 text-sm animate-in fade-in shadow-xs">
+        <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 px-4 py-3 rounded-xl flex items-center gap-2.5 text-sm shadow-xs">
           <CheckCircle2 size={16} className="shrink-0 text-emerald-500" />
           <span>{successMsg}</span>
         </div>
       )}
 
+      {!isSupabaseConfigured && (
+        <div className="bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 rounded-xl p-4 text-xs flex items-start gap-2.5">
+          <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+          <span>Supabase is not configured (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY). Showing built-in sample projects; changes cannot be saved.</span>
+        </div>
+      )}
+      {loadError && (
+        <div role="alert" className="bg-error/10 border border-error/30 text-error rounded-xl p-4 text-xs flex items-start gap-2.5">
+          <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+          <span>{loadError}</span>
+        </div>
+      )}
+
       {/* Database connection banner */}
+      {isSupabaseConfigured && (
       <div className="bg-surface-container-low border border-outline-variant/30 rounded-xl p-4 flex items-center justify-between gap-4 text-xs">
         <div className="flex items-center gap-2.5 text-on-surface-variant">
           <Database size={15} className="text-tertiary shrink-0" />
           <span><strong>PostgreSQL Database Connected:</strong> Real-time persistence via Supabase <code className="text-tertiary font-mono">portfolio_projects</code> table with automatic orientation metadata.</span>
         </div>
       </div>
+      )}
 
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -310,6 +377,8 @@ export default function AdminPortfolio() {
           {projects.map(p => {
             const cover = p.cover_image || p.cover_image_url || '/images/real_work_dzvz4ssjoss.jpg';
             const isFeatured = p.is_featured ?? p.featured ?? false;
+            const isPublished = p.is_published ?? true;
+            const photoCount = p.images?.length || 1;
             const hasInsta = Boolean(p.instagram_url || p.video_url || p.reel_url);
             const orientation = p.orientation || (p.reel_url ? 'portrait' : 'landscape');
 
@@ -324,6 +393,12 @@ export default function AdminPortfolio() {
                     </span>
                     <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-black/80 backdrop-blur-xs text-tertiary border border-tertiary/30 w-fit">
                       {orientation}
+                    </span>
+                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider w-fit flex items-center gap-1 ${isPublished ? 'bg-emerald-500/90 text-white' : 'bg-amber-500/90 text-black'}`}>
+                      {isPublished ? <Eye size={9} /> : <EyeOff size={9} />} {isPublished ? 'Published' : 'Draft'}
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-black/70 text-white/90 w-fit">
+                      {photoCount} photo{photoCount === 1 ? '' : 's'}
                     </span>
                   </div>
 
@@ -360,6 +435,13 @@ export default function AdminPortfolio() {
                     </button>
 
                     <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => togglePublished(p)}
+                        className={`px-2 py-1 rounded-md text-[11px] font-semibold border transition-colors cursor-pointer ${isPublished ? 'border-outline-variant/40 text-on-surface-variant hover:text-on-surface' : 'border-emerald-500/50 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10'}`}
+                        title={isPublished ? 'Hide from public site' : 'Show on public site'}
+                      >
+                        {isPublished ? 'Unpublish' : 'Publish'}
+                      </button>
                       <button
                         onClick={() => handleEdit(p)}
                         className="p-1.5 rounded-md text-on-surface-variant hover:text-tertiary hover:bg-surface-container transition-colors cursor-pointer"
@@ -612,6 +694,59 @@ export default function AdminPortfolio() {
                 )}
               </div>
 
+              {/* Additional gallery photos (portfolio_images) */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider">
+                    Gallery Photos <span className="text-on-surface-variant/60 font-normal lowercase">(optional)</span>
+                  </label>
+                  <label className={`text-xs text-tertiary font-semibold flex items-center gap-1 ${galleryUploading ? 'opacity-50 pointer-events-none' : 'cursor-pointer hover:underline'}`}>
+                    {galleryUploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                    <span>{galleryUploading ? 'Uploading...' : 'Add Photos'}</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/avif"
+                      multiple
+                      onChange={handleGalleryUpload}
+                      disabled={galleryUploading}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+                <p className="text-[11px] text-on-surface-variant">
+                  The cover plus these photos appear in "All Photos", the category tab and the project page.
+                </p>
+                {form.gallery.length > 0 && (
+                  <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
+                    {form.gallery.map(url => (
+                      <div key={url} className="relative aspect-square rounded-md overflow-hidden border border-outline-variant/30 group">
+                        <img src={url} alt="Gallery photo" className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setForm(f => ({
+                              ...f,
+                              coverImage: url,
+                              gallery: [f.coverImage, ...f.gallery.filter(g => g !== url)].filter(Boolean),
+                            }))}
+                            className="text-[9px] font-semibold text-white underline cursor-pointer"
+                          >
+                            Set cover
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setForm(f => ({ ...f, gallery: f.gallery.filter(g => g !== url) }))}
+                            className="text-[9px] font-semibold text-white underline cursor-pointer"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* 4. Description (Optional) */}
               <div>
                 <label className="block text-xs font-semibold text-on-surface-variant mb-1.5 uppercase tracking-wider">
@@ -637,6 +772,15 @@ export default function AdminPortfolio() {
                   />
                   <span>Feature this project on homepage</span>
                 </label>
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-on-surface mt-2">
+                  <input
+                    type="checkbox"
+                    checked={form.published}
+                    onChange={e => setForm({ ...form, published: e.target.checked })}
+                    className="accent-tertiary"
+                  />
+                  <span>Published (visible on the public Portfolio page)</span>
+                </label>
               </div>
             </div>
 
@@ -652,7 +796,7 @@ export default function AdminPortfolio() {
               <button
                 type="button"
                 onClick={handleSave}
-                disabled={saving || !form.title.trim() || !isInstaValid}
+                disabled={saving || uploading || galleryUploading || !form.title.trim() || !isInstaValid}
                 className="px-5 py-2 rounded-lg bg-tertiary text-on-tertiary text-xs font-semibold hover:bg-tertiary-fixed transition-colors shadow-xs cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
               >
                 {saving ? (
