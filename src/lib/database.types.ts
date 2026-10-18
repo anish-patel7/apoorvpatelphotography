@@ -178,8 +178,10 @@ export interface Database {
         Row: {
           id: string;
           title: string;
-          instagram_url: string;
+          instagram_url: string | null;
           thumbnail_url: string;
+          video_url: string | null;
+          media_type: 'instagram' | 'video';
           content_type: 'post' | 'reel' | 'carousel' | 'photo';
           status: 'configured' | 'incomplete';
           is_featured: boolean;
@@ -194,8 +196,10 @@ export interface Database {
         Insert: {
           id?: string;
           title?: string;
-          instagram_url: string;
-          thumbnail_url: string;
+          instagram_url?: string | null;
+          thumbnail_url?: string;
+          video_url?: string | null;
+          media_type?: 'instagram' | 'video';
           content_type?: 'post' | 'reel' | 'carousel' | 'photo';
           status?: 'configured' | 'incomplete';
           is_featured?: boolean;

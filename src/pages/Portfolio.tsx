@@ -3,22 +3,8 @@ import { Link } from 'react-router-dom';
 import { Play, Star, ArrowUpRight, Grid, LayoutGrid, X, ChevronLeft, ChevronRight, Maximize2 } from 'lucide-react';
 import InstagramIcon from '../components/icons/InstagramIcon';
 import SEO from '../components/common/SEO';
-import { usePortfolio } from '../hooks/usePortfolio';
-
-const portfolioCategories = [
-  'All',
-  'Wedding',
-  'Engagement',
-  'Pre-Wedding',
-  'Baby Shower',
-  'Family',
-  'Personal',
-  'Videography',
-  'Multimedia Design',
-  'Graphic Design',
-  'Photo Editing',
-  'Video Editing',
-] as const;
+import { usePortfolio, filterProjectsByCategory } from '../hooks/usePortfolio';
+import { portfolioCategories } from '../data/portfolio';
 
 const portfolioBreadcrumbs = {
   '@context': 'https://schema.org',
@@ -42,7 +28,9 @@ export default function Portfolio() {
   const [viewMode, setViewMode] = useState<'photos' | 'projects'>('photos');
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
-  const { projects, loading } = usePortfolio(activeCategory === 'All' ? undefined : activeCategory);
+  // One request for every published project; "All" and each category tab are views of the same list.
+  const { allProjects, loading, error } = usePortfolio();
+  const projects = useMemo(() => filterProjectsByCategory(allProjects, activeCategory), [allProjects, activeCategory]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -150,6 +138,10 @@ export default function Portfolio() {
         {loading ? (
           <div className="text-center py-20">
             <p className="text-on-surface-variant">Loading portfolio...</p>
+          </div>
+        ) : error && allProjects.length === 0 ? (
+          <div className="text-center py-20" role="alert">
+            <p className="text-on-surface-variant text-lg">{error}</p>
           </div>
         ) : viewMode === 'photos' ? (
           /* ================= Direct Photo Grid ================= */

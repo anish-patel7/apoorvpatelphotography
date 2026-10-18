@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ExternalLink, Image as ImageIcon, AlertCircle, RefreshCw, Play, Loader2 } from 'lucide-react';
 import InstagramIcon from '../icons/InstagramIcon';
-import { parseInstagramUrl } from '../../utils/instagram';
+import ReelVideoPlayer from './ReelVideoPlayer';
+import { INSTAGRAM_PROFILE_URL, parseInstagramUrl } from '../../utils/instagram';
+import { isDirectVideoUrl } from '../../utils/reelMedia';
 import { getVideoContainerAspectClass, type VideoOrientation } from '../../utils/videoOrientation';
 
 interface InstagramEmbedProps {
@@ -14,6 +16,27 @@ interface InstagramEmbedProps {
   className?: string;
 }
 
+// Height of Instagram's embed header + footer around the media, used until the
+// embed reports its real height via postMessage.
+const EMBED_CHROME_PX = 210;
+// If the frame hasn't loaded by then, assume it was blocked or is unavailable.
+const EMBED_TIMEOUT_MS = 12000;
+
+const MEDIA_RATIO: Record<VideoOrientation, number> = {
+  portrait: 9 / 16,
+  landscape: 16 / 9,
+  square: 1,
+};
+
+const FRAME_MAX_WIDTH_PX: Record<VideoOrientation, number> = {
+  portrait: 400,
+  landscape: 640,
+  square: 480,
+};
+
+// Instagram's embed needs at least 326px; above that, shrink so the whole frame fits the screen height.
+const IG_MIN_EMBED_WIDTH_PX = 326;
+
 export default function InstagramEmbed({
   url,
   fallbackThumbnail,
@@ -23,32 +46,49 @@ export default function InstagramEmbed({
   autoLoad = false,
   className = '',
 }: InstagramEmbedProps) {
-  const isDirectVideo = Boolean(
-    url && (
-      url.match(/\.(mp4|mov|webm|ogg|m4v)($|\?)/i) ||
-      url.startsWith('blob:') ||
-      url.includes('/video/')
-    )
-  );
+  // Portfolio entries may point at a hosted video file instead of Instagram.
+  const isDirectVideo = Boolean(url && (isDirectVideoUrl(url) || url.includes('/video/')));
 
   const parsed = parseInstagramUrl(url);
-  const [embedActive, setEmbedActive] = useState<boolean>(autoLoad || isDirectVideo);
-  const [loading, setLoading] = useState<boolean>(!isDirectVideo);
+  const [embedActive, setEmbedActive] = useState<boolean>(autoLoad);
+  const [loading, setLoading] = useState<boolean>(true);
   const [embedBlocked, setEmbedBlocked] = useState<boolean>(false);
+  const [frameHeight, setFrameHeight] = useState<number | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  // Safety timer: Never leave a permanent loading spinner if network stalls or iframe fails to notify
+  // Never leave a permanent spinner: if the frame never loads, show the fallback.
   useEffect(() => {
-    if (embedActive && loading && !isDirectVideo) {
-      const timer = setTimeout(() => {
-        setLoading(false);
-      }, 7000);
-      return () => clearTimeout(timer);
-    }
-  }, [embedActive, loading, isDirectVideo]);
+    if (!embedActive || !loading || isDirectVideo) return;
+    const timer = setTimeout(() => {
+      setLoading(false);
+      setEmbedBlocked(true);
+    }, EMBED_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [embedActive, loading, isDirectVideo, reloadKey]);
+
+  // Instagram's embed posts its rendered height (the same message embed.js uses).
+  useEffect(() => {
+    if (!embedActive || isDirectVideo) return;
+    const handleMessage = (event: MessageEvent) => {
+      if (!/^https:\/\/(www\.)?instagram\.com$/.test(event.origin)) return;
+      if (event.source !== iframeRef.current?.contentWindow) return;
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        const height = Number(data?.details?.height);
+        if (data?.type === 'MEASURE' && height > 100 && height < 4000) {
+          setFrameHeight(height);
+        }
+      } catch {
+        // Not a message we understand
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [embedActive, isDirectVideo]);
 
   // Determine effective orientation
-  const detectedType = parsed.type;
-  const isReel = aspectRatio === 'reel' || (aspectRatio === 'auto' && detectedType === 'reel');
+  const isReel = aspectRatio === 'reel' || (aspectRatio === 'auto' && parsed.type === 'reel');
   const effectiveOrientation: VideoOrientation = orientation
     ? orientation
     : isReel
@@ -60,21 +100,18 @@ export default function InstagramEmbed({
     : 'portrait';
 
   const aspectClass = getVideoContainerAspectClass(effectiveOrientation);
+  const originalUrl = parsed.canonicalUrl || url;
 
   // 1. Direct Video File Playback Mode (uploaded video files)
   if (isDirectVideo) {
     return (
-      <div className={`relative rounded-xl overflow-hidden border border-outline-variant/30 bg-black shadow-lg ${aspectClass} ${className}`}>
-        <video
-          src={url}
-          controls
-          playsInline
-          poster={fallbackThumbnail}
-          className="w-full h-full object-contain"
-        >
-          Your browser does not support the video tag.
-        </video>
-      </div>
+      <ReelVideoPlayer
+        src={url}
+        poster={fallbackThumbnail}
+        title={title}
+        aspectRatio={MEDIA_RATIO[effectiveOrientation]}
+        className={className}
+      />
     );
   }
 
@@ -84,7 +121,7 @@ export default function InstagramEmbed({
       <div className={`bg-surface-container-low border border-outline-variant/30 rounded-xl p-6 text-center space-y-4 ${className}`}>
         {fallbackThumbnail && (
           <div className="aspect-video max-w-md mx-auto rounded-lg overflow-hidden bg-surface-container-lowest">
-            <img src={fallbackThumbnail} alt={title} className="w-full h-full object-cover" />
+            <img src={fallbackThumbnail} alt={title} className="w-full h-full object-cover" loading="lazy" />
           </div>
         )}
         <div className="space-y-1">
@@ -94,7 +131,7 @@ export default function InstagramEmbed({
           </p>
         </div>
         <a
-          href={url || 'https://www.instagram.com/apoorvpatel_photography/'}
+          href={url || INSTAGRAM_PROFILE_URL}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-2 px-4 py-2 bg-tertiary/15 hover:bg-tertiary/25 text-tertiary border border-tertiary/30 rounded-lg text-xs font-semibold uppercase tracking-wider transition-colors"
@@ -105,7 +142,7 @@ export default function InstagramEmbed({
     );
   }
 
-  // 3. Cover Thumbnail Preview Mode (Privacy-conscious click-to-load)
+  // 3. Cover Thumbnail Preview Mode (click-to-load: no Meta requests until the visitor asks)
   if (!embedActive) {
     return (
       <div className={`relative rounded-xl overflow-hidden border border-outline-variant/30 bg-surface-container-low ${aspectClass} ${className}`}>
@@ -129,7 +166,9 @@ export default function InstagramEmbed({
 
           <div className="space-y-1 max-w-xs">
             <p className="font-display font-semibold text-white text-lg leading-snug">{title}</p>
-            <p className="text-white/70 text-xs">Click below to load interactive Instagram content</p>
+            <p className="text-white/70 text-xs">
+              Plays inside Instagram's player. Loading it connects to Instagram (Meta), which may set cookies.
+            </p>
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2">
@@ -137,14 +176,15 @@ export default function InstagramEmbed({
               type="button"
               onClick={() => {
                 setLoading(true);
+                setEmbedBlocked(false);
                 setEmbedActive(true);
               }}
-              className="px-4 py-2.5 bg-tertiary text-on-tertiary rounded-lg text-xs font-semibold uppercase tracking-wider hover:bg-tertiary-fixed transition-colors shadow-sm cursor-pointer"
+              className="px-4 py-2.5 bg-tertiary text-on-tertiary rounded-lg text-xs font-semibold uppercase tracking-wider hover:bg-tertiary-fixed transition-colors shadow-sm cursor-pointer inline-flex items-center gap-1.5"
             >
-              Load Interactive Embed
+              <Play size={13} fill="currentColor" /> {isReel ? 'Play Reel' : 'Load Post'}
             </button>
             <a
-              href={parsed.canonicalUrl || url}
+              href={originalUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="px-4 py-2.5 bg-surface-container hover:bg-surface-container-high border border-outline-variant/40 rounded-lg text-xs font-semibold text-on-surface transition-colors flex items-center gap-1.5 cursor-pointer"
@@ -158,13 +198,25 @@ export default function InstagramEmbed({
     );
   }
 
-  // 3. Active Embed Mode (Interactive iframe with fallback toolbar)
-  // Note: iframe onLoad confirms document frame receipt, but does not guarantee Meta third-party rendering.
-  // The fallback toolbar remains permanently accessible so the user is never stranded.
+  // 4. Active Embed Mode. iframe onLoad only confirms the frame document arrived — a
+  // private or deleted post still "loads" (Instagram shows its own notice inside), so
+  // the Open-on-Instagram fallback stays visible at all times.
+  const mediaRatio = MEDIA_RATIO[effectiveOrientation];
+  const frameStyle = frameHeight
+    ? { height: `${frameHeight}px` }
+    : { paddingBottom: `calc(${(100 / mediaRatio).toFixed(3)}% + ${EMBED_CHROME_PX}px)` };
+
   return (
-    <div className={`space-y-3 ${className}`}>
-      <div className={`relative rounded-xl overflow-hidden border border-outline-variant/30 bg-surface-container-lowest shadow-lg ${aspectClass}`}>
-        {/* Loading Spinner overlay */}
+    <div
+      className={`space-y-3 w-full mx-auto ${className}`}
+      style={{
+        maxWidth: `min(100%, clamp(${IG_MIN_EMBED_WIDTH_PX}px, calc((88vh - ${EMBED_CHROME_PX + 150}px) * ${mediaRatio.toFixed(4)}), ${FRAME_MAX_WIDTH_PX[effectiveOrientation]}px))`,
+      }}
+    >
+      <div
+        className="relative w-full rounded-xl overflow-hidden border border-outline-variant/30 bg-white shadow-lg"
+        style={frameStyle}
+      >
         {loading && (
           <div className="absolute inset-0 z-10 bg-surface-container-lowest flex flex-col items-center justify-center gap-3">
             <Loader2 size={32} className="animate-spin text-tertiary" />
@@ -172,13 +224,16 @@ export default function InstagramEmbed({
           </div>
         )}
 
-        {/* Sandboxed Embed Iframe */}
         <iframe
+          key={reloadKey}
+          ref={iframeRef}
           src={parsed.embedUrl}
           title={title}
-          className="w-full h-full border-0"
-          loading="lazy"
-          allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+          className="absolute inset-0 w-full h-full border-0"
+          scrolling="no"
+          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture; web-share"
+          allowFullScreen
+          referrerPolicy="strict-origin-when-cross-origin"
           onLoad={() => setLoading(false)}
           onError={() => {
             setLoading(false);
@@ -186,22 +241,21 @@ export default function InstagramEmbed({
           }}
         />
 
-        {/* Blocked Embed Overlay (If cross-site cookies / privacy policy prevented frame rendering) */}
         {embedBlocked && (
           <div className="absolute inset-0 z-20 bg-surface-container-low p-6 flex flex-col items-center justify-center text-center gap-3">
             <AlertCircle size={32} className="text-tertiary" />
-            <h4 className="font-display font-semibold text-on-surface text-base">Embed Blocked by Browser</h4>
+            <h4 className="font-display font-semibold text-on-surface text-base">Instagram content unavailable</h4>
             <p className="text-on-surface-variant text-xs max-w-xs leading-relaxed">
-              Your browser privacy settings or ad-blocker prevented the Instagram frame from displaying.
+              The post may be private or removed, or your browser's privacy settings blocked Instagram.
             </p>
-            <div className="flex gap-2 pt-2">
+            <div className="flex flex-wrap justify-center gap-2 pt-2">
               <a
-                href={parsed.canonicalUrl || url}
+                href={originalUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-4 py-2 bg-tertiary text-on-tertiary rounded-lg text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5"
               >
-                <span>Open Post on Instagram</span>
+                <span>Open on Instagram</span>
                 <ExternalLink size={12} />
               </a>
               {fallbackThumbnail && (
@@ -218,11 +272,10 @@ export default function InstagramEmbed({
         )}
       </div>
 
-      {/* Embed Controls & Fallback Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-xs">
         <div className="flex items-center gap-3">
           <a
-            href={parsed.canonicalUrl || url}
+            href={originalUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 text-tertiary hover:underline font-semibold"
@@ -249,6 +302,8 @@ export default function InstagramEmbed({
           onClick={() => {
             setLoading(true);
             setEmbedBlocked(false);
+            setFrameHeight(null);
+            setReloadKey(k => k + 1);
           }}
           className="inline-flex items-center gap-1 text-[11px] text-on-surface-variant/70 hover:text-on-surface transition-colors cursor-pointer"
           title="Reload embed frame"
