@@ -12,7 +12,7 @@ Supabase project. Code was deployed, the database was not.
 
 1. Open **Supabase → SQL Editor → New query**.
 2. Paste the **entire** contents of `supabase/setup/run_once_admin_setup.sql` and click **Run**.
-   - It contains migrations 008, 009, 010 and 011.
+   - It contains migrations 008, 009, 010, 011 and 012.
    - Every statement is guarded, so it is safe to run more than once.
    - It never deletes or resets content: existing reels, projects and photos are preserved
      (verified on PostgreSQL 16 against databases with and without earlier migrations).
@@ -27,6 +27,7 @@ Supabase project. Code was deployed, the database was not.
 | Area | Change |
 |---|---|
 | Reels | `video_url`, `media_type`, safe constraints, `reel-videos` bucket (MP4/WebM/MOV, 50 MB), admin-only writes |
+| Films & Reels (012) | `youtube_url`, `description`, `media_type` accepts `youtube` (no data rewritten, RLS unchanged) |
 | Portfolio | `portfolio_categories` table, managed in the admin; projects reference it (renames cascade, categories in use can't be deleted) |
 | Portfolio | Gallery items can be photos or videos (`media_type`, `poster_url`, `width`, `height`) |
 | Portfolio | `external_url` (YouTube/Vimeo/website links) and `is_auto_title` |

@@ -8,6 +8,7 @@ const migrations = [
   '009_portfolio_sync_integrity.sql',
   '010_admin_managed_portfolio.sql',
   '011_admin_managed_services_training.sql',
+  '012_reels_youtube_and_description.sql',
 ];
 
 const header = `-- ==============================================================================

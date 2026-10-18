@@ -1,10 +1,15 @@
 /**
  * Reel media helpers shared by the admin dashboard, the homepage showcase and the viewer.
- * A reel is either an Instagram post/reel (played via Instagram's public embed)
- * or a video uploaded to Supabase Storage (played with native HTML5 controls).
+ * A reel is one of:
+ *   - video:     a video uploaded to Supabase Storage (native HTML5 player, plays on the site);
+ *                may also carry its original Instagram link for attribution;
+ *   - youtube:   a YouTube Short / video (official YouTube embed, plays on the site where allowed);
+ *   - instagram: an Instagram link only (Instagram decides whether it can play off Instagram,
+ *                so the homepage offers it as "Watch on Instagram").
  */
 
 import { isValidInstagramUrl } from './instagram';
+import { getYouTubeThumbnail, parseYouTubeUrl } from './youtube';
 import type { InstagramReel, ReelMediaType } from '../types';
 
 export const REEL_VIDEO_BUCKET = 'reel-videos';
@@ -35,17 +40,35 @@ export function isDirectVideoUrl(url: string | null | undefined): boolean {
   return /\.(mp4|mov|webm|m4v)(\?|#|$)/i.test(trimmed) || trimmed.includes(`/storage/v1/object/public/${REEL_VIDEO_BUCKET}/`);
 }
 
-export function getReelMediaType(reel: Pick<InstagramReel, 'media_type' | 'video_url'>): ReelMediaType {
-  if (reel.media_type === 'video' || reel.media_type === 'instagram') return reel.media_type;
+export function getReelMediaType(reel: Pick<InstagramReel, 'media_type' | 'video_url'> & { youtube_url?: string }): ReelMediaType {
+  if (reel.media_type === 'video' || reel.media_type === 'instagram' || reel.media_type === 'youtube') return reel.media_type;
+  if (reel.youtube_url) return 'youtube';
   return reel.video_url ? 'video' : 'instagram';
 }
 
-/** True when the reel has something a visitor can actually play. */
+/** True when the reel has something a visitor can actually play or open. */
 export function hasPlayableMedia(reel: InstagramReel): boolean {
-  if (getReelMediaType(reel) === 'video') {
-    return Boolean(reel.video_url) && !isTemporaryUrl(reel.video_url);
-  }
+  const type = getReelMediaType(reel);
+  if (type === 'video') return Boolean(reel.video_url) && !isTemporaryUrl(reel.video_url);
+  if (type === 'youtube') return parseYouTubeUrl(reel.youtube_url) !== null;
   return isValidInstagramUrl(reel.instagram_url || reel.url || '');
+}
+
+/** True when the reel plays inside the website (uploaded video or YouTube embed). */
+export function isInlinePlayable(reel: InstagramReel): boolean {
+  const type = getReelMediaType(reel);
+  return (type === 'video' || type === 'youtube') && hasPlayableMedia(reel);
+}
+
+/** Card image: the saved thumbnail, else YouTube's public thumbnail, else '' (placeholder / first frame). */
+export function getReelPoster(reel: Pick<InstagramReel, 'thumbnail_url' | 'thumbnail' | 'youtube_url' | 'orientation' | 'media_type' | 'video_url'>): string {
+  const saved = (reel.thumbnail_url || reel.thumbnail || '').trim();
+  if (saved && !isTemporaryUrl(saved)) return saved;
+  if (getReelMediaType(reel) === 'youtube') {
+    const yt = parseYouTubeUrl(reel.youtube_url);
+    if (yt) return getYouTubeThumbnail(yt.id, reel.orientation || (yt.isShort ? 'portrait' : 'landscape'));
+  }
+  return '';
 }
 
 export function formatFileSize(bytes: number): string {

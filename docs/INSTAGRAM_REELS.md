@@ -1,11 +1,11 @@
-# Instagram Reels & Videos — Setup and Operations
+# Films & Reels — Setup and Operations
 
-The homepage **Latest from Instagram** showcase is managed from **/admin/reels**.
+The homepage **Latest Films & Reels** section is managed from **/admin/reels**.
 Changes are read live from Supabase, so no redeploy is needed.
 
 ## How visibility works
 
-| Published (status) | Featured | Homepage showcase | Admin dashboard |
+| Published (status) | Featured | Homepage section | Admin dashboard |
 |---|---|---|---|
 | Published (`configured`) | Yes | ✅ shown (first 7 by display order) | ✅ |
 | Published | No | — | ✅ |
@@ -13,21 +13,42 @@ Changes are read live from Supabase, so no redeploy is needed.
 
 Publishing and featuring are independent. Toggling one never changes the other.
 
-## Entry types
+## The three sources
 
-- **Instagram link**: a single reel or post URL (`/reel/…`, `/p/…`, `/tv/…`, share links). It plays in
-  Instagram's official embed, and only after the visitor clicks **Play Reel** (no Meta requests or
-  cookies before that). Instagram does not expose dimensions or thumbnails publicly, so choose the
-  orientation yourself and upload a cover screenshot.
-- **Uploaded video**: MP4 (H.264 recommended), WebM or MOV, up to 50 MB. It's stored in the `reel-videos`
-  bucket and plays with native HTML5 controls (sound, fullscreen). Dimensions and orientation are detected
-  automatically, and a thumbnail is generated from the video if you don't upload one. You can add the original
-  Instagram URL as well, which shows an "Open on Instagram" button.
+| Admin choice | Saved as | What visitors get |
+|---|---|---|
+| **Upload video** | `media_type = 'video'`, `video_url` | Thumbnail → press Play → native HTML5 player **inside the card** (sound, seek, replay, fullscreen). The most reliable option. |
+| **Instagram reel + original video** | `media_type = 'video'`, `video_url` + `instagram_url` | Same as an uploaded video. The Instagram link stays as a small "Also on Instagram" link. |
+| **Instagram reel, link only** | `media_type = 'instagram'`, `instagram_url` | The saved cover image, labelled **Watch on Instagram**. It opens Instagram in a new tab, because Instagram decides whether its reels can play on other sites. It never claims to play on the site. |
+| **YouTube Shorts / video** | `media_type = 'youtube'`, `youtube_url` | YouTube's thumbnail → press Play → the official YouTube player **inside the card**. If the owner has turned off embedding, the card says so and offers "Watch on YouTube". |
+
+Playback rules on the homepage:
+- Nothing heavy loads until Play is pressed. Cards show images, and uploaded videos use `preload="none"` when a thumbnail exists. YouTube iframes load only on click, so there are no Instagram/YouTube requests on page load.
+- Only one card plays at a time. Starting another card stops the first one and frees its media.
+- A playing card pauses when it is scrolled out of view.
+- There is no popup, modal or new tab for normal playback. The admin preview still uses a popup.
+
+Uploaded videos: MP4 (H.264) recommended, plus WebM and MOV, up to 50 MB, stored in the `reel-videos` bucket.
+The thumbnail is created automatically from the video (it skips black fade-in frames), and you can replace it
+or pick "Use a frame from the video". A replaced video/thumbnail is deleted only **after** the new one has
+uploaded and the save succeeded. Unused uploads are removed when the form is cancelled.
+
+Instagram link only: upload a cover screenshot, since Instagram does not share cover images with other websites.
+To make it play on the site, edit it and attach the original video. The record keeps its ID, with no duplicate.
+
+YouTube: paste `youtube.com/shorts/ID`, `youtube.com/watch?v=ID` or `youtu.be/ID`. The link is normalised.
+Shorts default to portrait and other videos to landscape. The thumbnail comes from `i.ytimg.com` (public, permanent),
+and you can replace it with an uploaded image.
 
 ## One-time Supabase setup
 
+0. **YouTube support needs migration 012** (`supabase/migrations/012_reels_youtube_and_description.sql`,
+   also included in the setup bundle). It only adds `youtube_url` and `description`, and widens the
+   `media_type` / "published has media" checks. It does not delete or rewrite data, change RLS or touch storage.
+   Until it is run, YouTube entries still work: they are saved in `video_url` and recognised by the site.
+   Descriptions are skipped until then.
 1. Open **Supabase → SQL Editor** and run `supabase/setup/run_once_admin_setup.sql`
-   (it includes 008; see `docs/ADMIN_SETUP.md`), or run
+   (it includes 008–012; see `docs/ADMIN_SETUP.md`), or run
    `supabase/migrations/008_reels_video_storage_and_publishing.sql` on its own.
    It is incremental and re-runnable. It never drops or deletes rows. It:
    - adds `video_url` and `media_type`, makes `instagram_url` optional, and gives `id` a UUID default
