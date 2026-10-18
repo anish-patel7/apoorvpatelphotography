@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase, getStorageUrl, isSupabaseConfigured, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 import { FriendlyError } from '../lib/adminErrors';
+import { shrinkImageToFit } from '../utils/shrinkImage';
 
 export interface UploadOptions {
   /** Reject files larger than this (bytes) before uploading. */
@@ -76,12 +77,17 @@ export function useStorage(bucket: string) {
   const [uploading, setUploading] = useState(false);
 
   /** Validates and uploads a file; throws a FriendlyError (plain-English message) on failure. */
-  const uploadFile = async (file: File, options: UploadOptions = {}): Promise<UploadResult> => {
+  const uploadFile = async (original: File, options: UploadOptions = {}): Promise<UploadResult> => {
     if (!isSupabaseConfigured) {
       throw new FriendlyError('Uploading is not available in this preview.');
     }
-    if (options.allowedTypes && !options.allowedTypes.includes(file.type)) {
-      throw new FriendlyError(`"${file.name}" is not a supported file type.`);
+    if (options.allowedTypes && !options.allowedTypes.includes(original.type)) {
+      throw new FriendlyError(`"${original.name}" is not a supported file type.`);
+    }
+    // Large photos are resized/recompressed in the browser instead of being rejected.
+    let file = original;
+    if (options.maxBytes && file.size > options.maxBytes && file.type.startsWith('image/')) {
+      file = await shrinkImageToFit(file, options.maxBytes).catch(() => original);
     }
     if (options.maxBytes && file.size > options.maxBytes) {
       const limitMb = Math.round(options.maxBytes / (1024 * 1024));

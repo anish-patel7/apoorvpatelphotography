@@ -233,8 +233,8 @@ export default function AdminPortfolio() {
       const isVideo = VIDEO_TYPES.includes(file.type);
       const isPhoto = PHOTO_TYPES.includes(file.type);
       if (!isVideo && !isPhoto) { rejected.push(`"${file.name}" is not a supported photo or video.`); continue; }
-      const limit = isVideo ? MAX_VIDEO_BYTES : MAX_PHOTO_BYTES;
-      if (file.size > limit) { rejected.push(`"${file.name}" is ${formatFileSize(file.size)} — the limit is ${formatFileSize(limit)}.`); continue; }
+      // Large photos are resized automatically during upload; only videos are capped here.
+      if (isVideo && file.size > MAX_VIDEO_BYTES) { rejected.push(`"${file.name}" is ${formatFileSize(file.size)} — the limit is ${formatFileSize(MAX_VIDEO_BYTES)}.`); continue; }
       drafts.push({
         file,
         draft: { key: nextKey(), url: '', type: isVideo ? 'video' : 'image', status: 'uploading', progress: 0, preview: URL.createObjectURL(file), name: file.name },
@@ -646,7 +646,7 @@ export default function AdminPortfolio() {
                   <label className="flex flex-col items-center justify-center gap-2 p-6 rounded-xl border-2 border-dashed border-outline-variant/50 hover:border-tertiary/60 bg-surface-container-lowest/60 text-center cursor-pointer transition-colors">
                     <Upload size={26} className="text-tertiary" />
                     <span className="text-sm font-semibold text-on-surface">Choose photos or videos</span>
-                    <span className="text-xs text-on-surface-variant">You can select several at once · Photos up to 10 MB · Videos (MP4, MOV) up to 50 MB</span>
+                    <span className="text-xs text-on-surface-variant">You can select several at once · Large photos are resized automatically · Videos (MP4, MOV) up to 50 MB</span>
                     <input type="file" multiple accept={[...PHOTO_TYPES, ...VIDEO_TYPES].join(',')} onChange={handleFiles} className="hidden" />
                   </label>
 
