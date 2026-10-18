@@ -66,7 +66,7 @@ export default function Services() {
   const initialTab = serviceCategories.some(c => c.id === requestedTab) ? (requestedTab as string) : 'photography';
 
   const [activeTab, setActiveTab] = useState<string>(initialTab);
-  const { services, loading } = useServices(activeTab);
+  const { services, loading, error } = useServices(activeTab);
 
   useEffect(() => {
     if (requestedTab && serviceCategories.some(c => c.id === requestedTab)) {
@@ -124,6 +124,10 @@ export default function Services() {
         {loading ? (
           <div className="text-center py-20">
             <p className="text-on-surface-variant">Loading services...</p>
+          </div>
+        ) : error ? (
+          <div className="text-center py-20" role="alert">
+            <p className="text-on-surface-variant text-lg">{error}</p>
           </div>
         ) : services.length === 0 ? (
           <div className="text-center py-20">

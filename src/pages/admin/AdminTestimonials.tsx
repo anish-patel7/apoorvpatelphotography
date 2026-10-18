@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Plus, Edit3, Trash2, Star, X, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
+import { Plus, Edit3, Trash2, Star, X, CheckCircle2, Loader2, AlertCircle, ArrowUp, ArrowDown } from 'lucide-react';
 import { friendlyError } from '../../lib/adminErrors';
 import { useTestimonialsAdmin } from '../../hooks/useTestimonials';
 
 export default function AdminTestimonials() {
-  const { testimonials: items, loading, create, update, remove } = useTestimonialsAdmin();
+  const { testimonials: items, loading, loadError, create, update, remove, move } = useTestimonialsAdmin();
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
@@ -108,6 +108,7 @@ export default function AdminTestimonials() {
 
   return (
     <div className="space-y-6">
+      {loadError && <div role="alert" className="bg-error/10 border border-error/30 text-error rounded-xl p-4 text-sm">{loadError}</div>}
       {successMsg && (
         <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-3 rounded-xl flex items-center gap-2.5 text-sm">
           <CheckCircle2 size={16} className="shrink-0 text-emerald-400" />
@@ -141,7 +142,7 @@ export default function AdminTestimonials() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {items.map(t => {
+          {items.map((t, idx) => {
             const isApproved = t.is_approved ?? t.approved ?? false;
             const reviewName = t.client_name || t.name || 'Client';
             const reviewText = t.testimonial || t.review || '';
@@ -178,13 +179,31 @@ export default function AdminTestimonials() {
                       onClick={() => handleEdit(t)}
                       className="p-1.5 rounded-md text-on-surface-variant hover:text-tertiary hover:bg-surface-container transition-colors cursor-pointer"
                       title="Edit Review"
+                      aria-label={`Edit review from ${reviewName}`}
                     >
                       <Edit3 size={15} />
+                    </button>
+                    <button
+                      onClick={() => move(t.id, -1).catch(err => alert(friendlyError(err, 'Reorder testimonials', 'The order could not be saved.')))}
+                      disabled={idx === 0}
+                      className="p-1.5 rounded-md text-on-surface-variant hover:text-tertiary disabled:opacity-30 cursor-pointer"
+                      aria-label={`Move review from ${reviewName} earlier`}
+                    >
+                      <ArrowUp size={15} />
+                    </button>
+                    <button
+                      onClick={() => move(t.id, 1).catch(err => alert(friendlyError(err, 'Reorder testimonials', 'The order could not be saved.')))}
+                      disabled={idx === items.length - 1}
+                      className="p-1.5 rounded-md text-on-surface-variant hover:text-tertiary disabled:opacity-30 cursor-pointer"
+                      aria-label={`Move review from ${reviewName} later`}
+                    >
+                      <ArrowDown size={15} />
                     </button>
                     <button
                       onClick={() => handleDelete(t.id)}
                       className="p-1.5 rounded-md text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors cursor-pointer"
                       title="Delete Review"
+                      aria-label={`Delete review from ${reviewName}`}
                     >
                       <Trash2 size={15} />
                     </button>

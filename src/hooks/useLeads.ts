@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import type { LeadStatus } from '../lib/database.types';
+import { FriendlyError, toFriendly } from '../lib/adminErrors';
 
 export interface Lead {
   id: string;
@@ -26,7 +27,7 @@ function mapInquiryRow(row: any): Lead {
     id: row.id,
     name: row.customer_name || row.name || 'Anonymous',
     mobile: row.phone || row.mobile || '',
-    whatsapp: row.phone || row.whatsapp || '',
+    whatsapp: row.whatsapp || row.phone || '',
     email: row.email || '',
     service_type: row.event_type || row.service_type || 'Photography',
     event_type: row.event_type || null,
@@ -55,6 +56,8 @@ export function useSubmitInquiry() {
     location?: string;
     budget?: string;
     message: string;
+    /** 'training' for student enquiries, otherwise 'website'. */
+    source?: 'website' | 'training';
     honeypot?: string;
   }): Promise<{ success: boolean; id?: string; error?: string }> => {
     setSubmitting(true);
@@ -98,6 +101,7 @@ export function useSubmitInquiry() {
           location: data.location || null,
           budget: data.budget || null,
           message: cleanMsg,
+          source: data.source === 'training' ? 'training' : 'website',
           website_source_hp: data.honeypot || '',
         }),
       });
@@ -120,7 +124,7 @@ export function useSubmitInquiry() {
           p_event_location: data.location || null,
           p_budget: data.budget || null,
           p_message: cleanMsg,
-          p_source: 'website',
+          p_source: data.source === 'training' ? 'training' : 'website',
         });
 
         if (!rpcError && rpcResult?.success) {
@@ -149,104 +153,79 @@ export function useSubmitInquiry() {
   return { submit, submitting };
 }
 
-export function useLeadsAdmin(statusFilter?: LeadStatus, search?: string) {
+/** Characters that have meaning inside a PostgREST or() filter are removed from search text. */
+function sanitizeSearch(q: string): string {
+  return q.replace(/[,()*%\\:"']/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
+}
+
+export type LeadKind = 'client' | 'student';
+
+export function useLeadsAdmin(statusFilter?: LeadStatus, search?: string, kind?: LeadKind) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetch = useCallback(async () => {
-    setLoading(true);
     if (!isSupabaseConfigured) {
+      await Promise.resolve();
       setLeads([]);
       setLoading(false);
       return;
     }
 
-    try {
-      let query = supabase
-        .from('inquiries')
-        .select('*')
-        .order('created_at', { ascending: false });
+    let query = supabase
+      .from('inquiries')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-      if (statusFilter) {
-        query = query.eq('inquiry_status', statusFilter);
-      }
+    if (statusFilter) query = query.eq('inquiry_status', statusFilter);
+    if (kind === 'student') query = query.eq('source', 'training');
+    if (kind === 'client') query = query.neq('source', 'training');
 
-      if (search && search.trim()) {
-        const q = search.trim();
-        query = query.or(`customer_name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`);
-      }
+    const q = sanitizeSearch(search || '');
+    if (q) query = query.or(`customer_name.ilike.*${q}*,email.ilike.*${q}*,phone.ilike.*${q}*`);
 
-      const { data, error } = await query;
-      if (error) {
-        // Fallback to leads table if inquiries isn't present
-        const { data: leadsData, error: leadsErr } = await supabase
-          .from('leads')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (leadsErr) {
-          console.error('Inquiries & Leads fetch error:', leadsErr.message);
-          setLeads([]);
-        } else {
-          setLeads((leadsData || []).map(mapInquiryRow));
-        }
-      } else {
-        setLeads((data || []).map(mapInquiryRow));
-      }
-    } catch (err) {
-      console.error('Error fetching admin inquiries:', err);
-      setLeads([]);
-    } finally {
-      setLoading(false);
+    const { data, error: queryError } = await query;
+    if (queryError) {
+      setError(toFriendly(queryError, 'Load enquiries', 'Your enquiries could not be loaded. Please refresh the page.').message);
+    } else {
+      setError(null);
+      setLeads((data || []).map(mapInquiryRow));
     }
-  }, [statusFilter, search]);
+    setLoading(false);
+  }, [statusFilter, search, kind]);
 
-  useEffect(() => { fetch(); }, [fetch]);
+  useEffect(() => { void fetch(); }, [fetch]);
+
+  const requireConfigured = () => {
+    if (!isSupabaseConfigured) throw new FriendlyError('Saving is not available in this preview.');
+  };
 
   const updateStatus = async (id: string, status: LeadStatus) => {
-    if (!isSupabaseConfigured) {
-      setLeads(prev => prev.map(l => l.id === id ? { ...l, status } : l));
-      return;
-    }
-
-    const { error } = await (supabase.from('inquiries').update as any)({ inquiry_status: status }).eq('id', id);
-    if (error) {
-      // Fallback update to leads table
-      await (supabase.from('leads').update as any)({ status }).eq('id', id);
-    }
+    requireConfigured();
+    const { data, error: e } = await (supabase.from('inquiries').update as any)({ inquiry_status: status }).eq('id', id).select('id');
+    if (e) throw toFriendly(e, 'Update enquiry status');
+    if (!data || data.length === 0) throw new FriendlyError('This enquiry could not be updated. Please refresh the page.');
     await fetch();
   };
 
   const addNote = async (id: string, noteText: string) => {
+    requireConfigured();
     if (!noteText.trim()) return;
     const target = leads.find(l => l.id === id);
-    const existingNotes = target?.notes || [];
-    const updatedNotes = [...existingNotes, noteText.trim()];
-
-    if (!isSupabaseConfigured) {
-      setLeads(prev => prev.map(l => l.id === id ? { ...l, notes: updatedNotes } : l));
-      return;
-    }
-
-    const { error } = await (supabase.from('inquiries').update as any)({ notes: updatedNotes }).eq('id', id);
-    if (error) {
-      await (supabase.from('leads').update as any)({ notes: updatedNotes }).eq('id', id);
-    }
+    const updatedNotes = [...(target?.notes || []), noteText.trim()];
+    const { data, error: e } = await (supabase.from('inquiries').update as any)({ notes: updatedNotes }).eq('id', id).select('id');
+    if (e) throw toFriendly(e, 'Add enquiry note');
+    if (!data || data.length === 0) throw new FriendlyError('The note could not be saved. Please refresh the page.');
     await fetch();
   };
 
   const remove = async (id: string) => {
-    if (!isSupabaseConfigured) {
-      setLeads(prev => prev.filter(l => l.id !== id));
-      return;
-    }
-
-    const { error } = await supabase.from('inquiries').delete().eq('id', id);
-    if (error) {
-      await supabase.from('leads').delete().eq('id', id);
-    }
+    requireConfigured();
+    const { error: e } = await supabase.from('inquiries').delete().eq('id', id);
+    if (e) throw toFriendly(e, 'Delete enquiry');
     await fetch();
   };
 
-  return { leads, loading, updateStatus, addNote, remove, refetch: fetch };
+  return { leads, loading, error, updateStatus, addNote, remove, refetch: fetch };
 }

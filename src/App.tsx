@@ -16,6 +16,7 @@ const Services = lazy(() => import('./pages/Services'));
 const Training = lazy(() => import('./pages/Training'));
 const About = lazy(() => import('./pages/About'));
 const Contact = lazy(() => import('./pages/Contact'));
+const NotFound = lazy(() => import('./pages/NotFound'));
 
 // Lazy-loaded Admin dashboard routes (split completely from public bundle)
 const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'));
@@ -108,6 +109,7 @@ export default function App() {
                   <Route path="training" element={<Training />} />
                   <Route path="about" element={<About />} />
                   <Route path="contact" element={<Contact />} />
+                  <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>
             </main>

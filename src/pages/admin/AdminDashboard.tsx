@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Users, FolderOpen, Camera, MessageSquareQuote, TrendingUp, Film, RefreshCw, Mail, Phone, Calendar } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { runSystemCheck } from '../../lib/systemCheck';
+import { logTechnicalError } from '../../lib/adminErrors';
 import type { InquiryStatus } from '../../lib/database.types';
 
 interface DashboardStats {
@@ -54,59 +55,52 @@ export default function AdminDashboard() {
   });
 
   const [recentInquiries, setRecentInquiries] = useState<RecentInquiry[]>([]);
+  const [statsError, setStatsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchDashboardData = async () => {
     setLoading(true);
     if (!isSupabaseConfigured) {
-      // In offline/unconfigured mode, reflect initial studio state without fabricated numbers
-      setStats({
-        totalProjects: 1,
-        publishedProjects: 1,
-        totalInquiries: 0,
-        newInquiries: 0,
-        activeServices: 6,
-        approvedTestimonials: 0,
-        configuredReels: 1,
-      });
+      // Preview without a database: show zeros, never invented numbers.
       setRecentInquiries([]);
       setLoading(false);
       return;
     }
 
     try {
-      // Query counts concurrently
-      const [
-        projectsRes,
-        inquiriesRes,
-        servicesRes,
-        testimonialsRes,
-        reelsRes,
-        recentRes,
-      ] = await Promise.all([
-        supabase.from('portfolio_projects').select('id, is_published'),
-        supabase.from('inquiries').select('id, inquiry_status'),
-        supabase.from('services').select('id, is_active'),
-        supabase.from('testimonials').select('id, is_approved'),
-        supabase.from('instagram_reels').select('id, status, is_featured'),
-        supabase.from('inquiries').select('*').order('created_at', { ascending: false }).limit(5),
-      ]);
-
-      const projects = projectsRes.data || [];
-      const inquiries = inquiriesRes.data || [];
-      const services = servicesRes.data || [];
-      const testimonials = testimonialsRes.data || [];
-      const reels = reelsRes.data || [];
-
-      setStats({
-        totalProjects: projects.length,
-        publishedProjects: projects.filter(p => (p as any).is_published ?? true).length,
-        totalInquiries: inquiries.length,
-        newInquiries: inquiries.filter(i => (i as any).inquiry_status === 'new').length,
-        activeServices: services.filter(s => (s as any).is_active ?? true).length,
-        approvedTestimonials: testimonials.filter(t => (t as any).is_approved ?? true).length,
+      // Exact counts (head requests) so totals are never capped by the API row limit.
+      const count = (table: string, apply?: (q: any) => any) => {
+        const base = supabase.from(table).select('id', { count: 'exact', head: true });
+        return apply ? apply(base) : base;
+      };
+      const results = await Promise.all([
+        count('portfolio_projects'),
+        count('portfolio_projects', q => q.eq('is_published', true)),
+        count('inquiries'),
+        count('inquiries', q => q.eq('inquiry_status', 'new')),
+        count('services', q => q.eq('is_active', true)),
+        count('testimonials', q => q.eq('is_approved', true)),
         // Matches the homepage showcase rule: Published AND Featured
-        configuredReels: reels.filter(r => (r as any).status === 'configured' && (r as any).is_featured).length,
+        count('instagram_reels', q => q.eq('status', 'configured').eq('is_featured', true)),
+      ]);
+      const recentRes = await supabase.from('inquiries').select('*').order('created_at', { ascending: false }).limit(5);
+
+      const failed = [...results, recentRes].find((r: any) => r.error);
+      if (failed) {
+        logTechnicalError('Dashboard statistics', (failed as any).error);
+        setStatsError('Some figures could not be loaded. Please refresh the page.');
+      } else {
+        setStatsError(null);
+      }
+      const n = (i: number) => (results[i] as any).count ?? 0;
+      setStats({
+        totalProjects: n(0),
+        publishedProjects: n(1),
+        totalInquiries: n(2),
+        newInquiries: n(3),
+        activeServices: n(4),
+        approvedTestimonials: n(5),
+        configuredReels: n(6),
       });
 
       if (recentRes.data) {
@@ -146,6 +140,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-8">
+      {statsError && <div role="alert" className="bg-error/10 border border-error/30 text-error rounded-xl p-4 text-sm">{statsError}</div>}
       {setupIncomplete && (
         <div role="status" className="bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 rounded-xl p-4 text-sm">
           Some features (such as video uploads) need a one-time setup by your website developer. Your website is working normally.

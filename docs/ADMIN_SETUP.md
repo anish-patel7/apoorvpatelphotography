@@ -12,7 +12,7 @@ Supabase project. Code was deployed, the database was not.
 
 1. Open **Supabase → SQL Editor → New query**.
 2. Paste the **entire** contents of `supabase/setup/run_once_admin_setup.sql` and click **Run**.
-   - It contains migrations 008, 009 and 010.
+   - It contains migrations 008, 009, 010 and 011.
    - Every statement is guarded, so it is safe to run more than once.
    - It never deletes or resets content: existing reels, projects and photos are preserved
      (verified on PostgreSQL 16 against databases with and without earlier migrations).
@@ -31,12 +31,21 @@ Supabase project. Code was deployed, the database was not.
 | Portfolio | Gallery items can be photos or videos (`media_type`, `poster_url`, `width`, `height`) |
 | Portfolio | `external_url` (YouTube/Vimeo/website links) and `is_auto_title` |
 | Storage | `portfolio-videos` bucket (50 MB, video types); `portfolio-images` (10 MB, image types) re-asserted |
-| Security | RLS: the public reads only published/active content; only active admins can write |
+| Services & Training | Copies today's public services/courses into the database (insert-only, skips existing slugs/titles) so they become editable without anything disappearing |
+| Security | RLS: the public reads only published/active content; only active admins can write. Legacy 001-era policies that let any signed-in user write are removed if present |
 
 Until the setup is run, the dashboard keeps working:
 - Instagram reel links and portfolio photos still save, in a compatible format.
 - Video uploads and category editing show a plain-English message asking for the setup.
 - The technical detail is logged to the browser console and shown on **System Check**.
+
+### Recommended Supabase settings (owner/developer)
+
+1. **Authentication → Sign In / Providers → disable "Allow new users to sign up".** Admin access is
+   already limited to `admin_profiles`, but there is no reason for public sign-ups on this site.
+2. **Optional:** run `supabase/optional/harden_inquiry_inserts.sql`. It stops anyone inserting enquiries
+   directly with the public key, so every enquiry goes through the duplicate check and the 5-per-hour limit.
+   Read the header first: it changes live permissions and includes an undo line.
 
 ## 2. Developer diagnostics
 

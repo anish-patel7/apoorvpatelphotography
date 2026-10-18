@@ -21,7 +21,7 @@ export default function About() {
         schema={aboutBreadcrumbs}
       />
       {/* Hero */}
-      <section className="px-5 md:px-16 py-[120px] max-w-[1440px] mx-auto">
+      <section className="px-5 md:px-16 py-[120px] max-w-[1440px] mx-auto overflow-x-clip">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
           <div>
             <p className="font-body text-[12px] font-bold tracking-[0.2em] uppercase text-tertiary mb-6">About Us</p>
@@ -57,8 +57,10 @@ export default function About() {
           <div className="relative">
             <div className="aspect-[4/5] rounded-sm overflow-hidden border border-outline-variant/10">
               <img
-                src="https://images.unsplash.com/photo-1554048612-b6a482bc67e5?w=800&q=80"
-                alt="Professional photographer at work"
+                src="/images/portfolio/engagement-session/photo_10.webp"
+                alt="Low-light engagement ring detail photographed by Apoorv Patel"
+                loading="lazy"
+                decoding="async"
                 className="w-full h-full object-cover opacity-80 hover:opacity-100 transition-opacity duration-700"
               />
             </div>
