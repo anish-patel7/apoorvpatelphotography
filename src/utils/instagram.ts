@@ -7,6 +7,10 @@
 
 export type InstagramType = 'post' | 'reel' | 'tv';
 
+/** Official studio Instagram profile. */
+export const INSTAGRAM_PROFILE_URL = 'https://www.instagram.com/apoorvpatel_photography/';
+export const INSTAGRAM_HANDLE = '@apoorvpatel_photography';
+
 export interface ParsedInstagramInfo {
   isValid: boolean;
   id: string | null;

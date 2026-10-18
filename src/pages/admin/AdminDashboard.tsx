@@ -81,7 +81,7 @@ export default function AdminDashboard() {
         supabase.from('inquiries').select('id, inquiry_status'),
         supabase.from('services').select('id, is_active'),
         supabase.from('testimonials').select('id, is_approved'),
-        supabase.from('instagram_reels').select('id, status'),
+        supabase.from('instagram_reels').select('id, status, is_featured'),
         supabase.from('inquiries').select('*').order('created_at', { ascending: false }).limit(5),
       ]);
 
@@ -98,7 +98,8 @@ export default function AdminDashboard() {
         newInquiries: inquiries.filter(i => (i as any).inquiry_status === 'new').length,
         activeServices: services.filter(s => (s as any).is_active ?? true).length,
         approvedTestimonials: testimonials.filter(t => (t as any).is_approved ?? true).length,
-        configuredReels: reels.filter(r => (r as any).status === 'configured').length,
+        // Matches the homepage showcase rule: Published AND Featured
+        configuredReels: reels.filter(r => (r as any).status === 'configured' && (r as any).is_featured).length,
       });
 
       if (recentRes.data) {
