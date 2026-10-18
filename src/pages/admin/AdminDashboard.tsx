@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Users, FolderOpen, Camera, MessageSquareQuote, TrendingUp, Film, RefreshCw, Mail, Phone, Calendar } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
+import { runSystemCheck } from '../../lib/systemCheck';
 import type { InquiryStatus } from '../../lib/database.types';
 
 interface DashboardStats {
@@ -36,6 +37,12 @@ const statusColors: Record<string, string> = {
 };
 
 export default function AdminDashboard() {
+  const [setupIncomplete, setSetupIncomplete] = useState(false);
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    runSystemCheck().then(results => setSetupIncomplete(results.some(r => !r.ok)));
+  }, []);
+
   const [stats, setStats] = useState<DashboardStats>({
     totalProjects: 0,
     publishedProjects: 0,
@@ -139,10 +146,15 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-8">
+      {setupIncomplete && (
+        <div role="status" className="bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 rounded-xl p-4 text-sm">
+          Some features (such as video uploads) need a one-time setup by your website developer. Your website is working normally.
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="font-display text-2xl sm:text-3xl font-bold text-on-surface">Studio Overview</h2>
-          <p className="text-on-surface-variant text-sm mt-1">Real database statistics and recent client inquiries</p>
+          <p className="text-on-surface-variant text-sm mt-1">An overview of your website and recent client enquiries</p>
         </div>
         <button
           onClick={fetchDashboardData}
@@ -171,7 +183,7 @@ export default function AdminDashboard() {
       <div className="bg-surface-container-low rounded-xl border border-outline-variant/30 overflow-hidden shadow-xs">
         <div className="px-6 py-4 border-b border-outline-variant/30 flex items-center justify-between">
           <h3 className="font-display text-lg font-semibold text-on-surface">Recent Customer Inquiries</h3>
-          <span className="text-xs font-semibold text-on-surface-variant tracking-wider uppercase">Live Postgres Feed</span>
+          <span className="text-xs font-semibold text-on-surface-variant tracking-wider uppercase">Latest</span>
         </div>
 
         {recentInquiries.length === 0 ? (
@@ -181,7 +193,7 @@ export default function AdminDashboard() {
             </div>
             <p className="text-on-surface font-medium text-sm">No Customer Inquiries Yet</p>
             <p className="text-on-surface-variant text-xs mt-1 max-w-sm mx-auto">
-              When clients submit inquiries through the contact page or booking forms, they will be securely stored in PostgreSQL and displayed here.
+              When clients submit inquiries through the contact page or booking forms, they will appear here.
             </p>
           </div>
         ) : (

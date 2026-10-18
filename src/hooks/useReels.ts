@@ -11,6 +11,7 @@ import {
   isTemporaryUrl,
 } from '../utils/reelMedia';
 import { getStoragePathFromPublicUrl } from './useStorage';
+import { FriendlyError, isMissingSchemaError, logTechnicalError, toFriendly } from '../lib/adminErrors';
 import type { InstagramReel, ReelMediaType } from '../types';
 
 export function mapDatabaseRowToReel(row: any): InstagramReel {
@@ -60,7 +61,7 @@ export function mapDatabaseRowToReel(row: any): InstagramReel {
 
 function assertPersistableUrl(url: string, label: string) {
   if (isTemporaryUrl(url)) {
-    throw new Error(`${label} is a temporary browser preview link and cannot be saved. Wait for the upload to finish.`);
+    throw new FriendlyError(`${label} is a temporary browser preview link and cannot be saved. Wait for the upload to finish.`);
   }
 }
 
@@ -89,7 +90,7 @@ export function formatReelPayload(input: any) {
     } else {
       const parsed = parseInstagramUrl(trimmed);
       if (!parsed.isValid || !parsed.canonicalUrl) {
-        throw new Error('Please enter a valid Instagram post or reel URL (e.g. https://www.instagram.com/reel/...).');
+        throw new FriendlyError('Please enter a valid Instagram post or reel URL (e.g. https://www.instagram.com/reel/...).');
       }
       payload.instagram_url = parsed.canonicalUrl;
       if (input.content_type === undefined) {
@@ -106,7 +107,7 @@ export function formatReelPayload(input: any) {
 
   if (input.media_type !== undefined) {
     if (input.media_type !== 'instagram' && input.media_type !== 'video') {
-      throw new Error(`Unknown media type "${input.media_type}".`);
+      throw new FriendlyError(`Unknown media type "${input.media_type}".`);
     }
     payload.media_type = input.media_type;
   }
@@ -161,23 +162,35 @@ export function formatReelPayload(input: any) {
   return payload;
 }
 
-/** Turns Supabase/Postgres errors into messages an admin can act on. */
-function describeDbError(error: any): Error {
-  const code = error?.code as string | undefined;
-  const message = (error?.message as string | undefined) || 'Database request failed.';
-  if (code === '23505') {
-    return new Error('This Instagram URL has already been added. Edit the existing entry instead.');
+/**
+ * Columns added by migration 008. If the one-time setup has not been run yet, saves are
+ * retried in the pre-008 format (uploaded video URL kept in instagram_url, which
+ * mapDatabaseRowToReel understands) so the owner can keep working; the gap is logged.
+ */
+function toLegacyReelPayload(payload: Record<string, any>): Record<string, any> {
+  const legacy = { ...payload };
+  if (legacy.media_type === 'video' && legacy.video_url) legacy.instagram_url = legacy.video_url;
+  delete legacy.video_url;
+  delete legacy.media_type;
+  return legacy;
+}
+
+async function writeWithSchemaFallback<T>(
+  payload: Record<string, any>,
+  write: (body: Record<string, any>) => PromiseLike<{ data: T; error: any }>,
+  context: string
+): Promise<T> {
+  let { data, error } = await write(payload);
+  if (error && isMissingSchemaError(error) && ('video_url' in payload || 'media_type' in payload)) {
+    logTechnicalError(`${context} (database setup 008 not applied; saved in compatibility format)`, error);
+    ({ data, error } = await write(toLegacyReelPayload(payload)));
   }
-  if (code === '42703' || code === 'PGRST204' || /column .* does not exist|could not find the .* column/i.test(message)) {
-    return new Error('The database is missing the new reel columns. Run migration 008_reels_video_storage_and_publishing.sql in Supabase.');
+  if (error) {
+    if (error.code === '23505') throw new FriendlyError('This Instagram link has already been added.');
+    if (error.code === '23514') throw new FriendlyError('Please add an Instagram link or upload a video before publishing.');
+    throw toFriendly(error, context);
   }
-  if (code === '42501' || /row-level security/i.test(message)) {
-    return new Error('Permission denied. Sign in with an active admin account.');
-  }
-  if (code === '23514') {
-    return new Error('A published entry needs an Instagram URL or an uploaded video, and links must not be temporary previews.');
-  }
-  return new Error(message);
+  return data;
 }
 
 function newReelId(): string {
@@ -268,8 +281,7 @@ export function useReelsAdmin() {
       .order('created_at', { ascending: false });
 
     if (queryError) {
-      console.error('Reels admin fetch error:', queryError);
-      setError(describeDbError(queryError).message);
+      setError(toFriendly(queryError, 'Load reels', 'Your reels could not be loaded. Please refresh the page.').message);
       setLoading(false);
       return [];
     }
@@ -288,8 +300,11 @@ export function useReelsAdmin() {
     const payload = formatReelPayload({ ...reelData, id: reelData.id ?? newReelId() });
     // New entries are drafts unless publication was explicitly requested.
     if (payload.status === undefined) payload.status = 'incomplete';
-    const { data, error: insertError } = await (supabase.from('instagram_reels').insert as any)([payload]).select();
-    if (insertError) throw describeDbError(insertError);
+    const data = await writeWithSchemaFallback(
+      payload,
+      body => (supabase.from('instagram_reels').insert as any)([body]).select(),
+      'Create reel'
+    );
     await load();
     return data;
   };
@@ -298,10 +313,14 @@ export function useReelsAdmin() {
     const payload = formatReelPayload(updates);
     delete payload.id; // Do not update primary key
     if (Object.keys(payload).length === 0) return null;
-    const { data, error: updateError } = await (supabase.from('instagram_reels').update as any)(payload).eq('id', id).select();
-    if (updateError) throw describeDbError(updateError);
+    const data = await writeWithSchemaFallback<any[]>(
+      payload,
+      body => (supabase.from('instagram_reels').update as any)(body).eq('id', id).select(),
+      'Update reel'
+    );
     if (!data || data.length === 0) {
-      throw new Error('No reel was updated. It may have been deleted, or you lack admin permission.');
+      logTechnicalError('Update reel', new Error(`No row updated for id ${id} (deleted, or RLS denied)`));
+      throw new FriendlyError('This reel could not be updated. Please refresh the page and try again.');
     }
     await load();
     return data;
@@ -311,7 +330,7 @@ export function useReelsAdmin() {
   const remove = async (id: string) => {
     const target = reels.find(r => r.id === id);
     const { error: deleteError } = await supabase.from('instagram_reels').delete().eq('id', id);
-    if (deleteError) throw describeDbError(deleteError);
+    if (deleteError) throw toFriendly(deleteError, 'Delete reel');
     const remaining = await load();
 
     if (target) {
@@ -350,7 +369,7 @@ export function useReelsAdmin() {
     );
     const failed = results.find(r => r.error);
     await load();
-    if (failed?.error) throw describeDbError(failed.error);
+    if (failed?.error) throw toFriendly(failed.error, 'Reorder reels');
   };
 
   return { reels, loading, error, create, update, remove, move, refetch: load };

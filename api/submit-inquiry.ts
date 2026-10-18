@@ -74,7 +74,7 @@ export default async function handler(req: any, res: any) {
     if (!supabaseUrl || !supabaseKey || supabaseUrl.includes('your-project')) {
       return res.status(503).json({
         success: false,
-        error: 'Studio inquiry database is currently offline or unconfigured.',
+        error: 'Our enquiry service is temporarily unavailable. Please contact us directly via WhatsApp.',
       });
     }
 
@@ -156,7 +156,7 @@ export default async function handler(req: any, res: any) {
       console.error('[Inquiries API] Insert error:', insertError.message);
       return res.status(500).json({
         success: false,
-        error: insertError.message || 'Unable to record your inquiry. Please try again or reach out via WhatsApp.',
+        error: 'Unable to record your inquiry. Please try again or reach out via WhatsApp.',
       });
     }
 

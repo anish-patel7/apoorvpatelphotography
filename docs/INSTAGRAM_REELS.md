@@ -26,8 +26,9 @@ Publishing and featuring are independent. Toggling one never changes the other.
 
 ## One-time Supabase setup
 
-1. Open **Supabase → SQL Editor** and run
-   `supabase/migrations/008_reels_video_storage_and_publishing.sql`.
+1. Open **Supabase → SQL Editor** and run `supabase/setup/run_once_admin_setup.sql`
+   (it includes 008; see `docs/ADMIN_SETUP.md`), or run
+   `supabase/migrations/008_reels_video_storage_and_publishing.sql` on its own.
    It is incremental and re-runnable. It never drops or deletes rows. It:
    - adds `video_url` and `media_type`, makes `instagram_url` optional, and gives `id` a UUID default
    - moves videos previously stored in `instagram_url` to `video_url`

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Plus, Edit3, Trash2, X, Loader2, Database } from 'lucide-react';
+import { Plus, Edit3, Trash2, X, Loader2 } from 'lucide-react';
+import { friendlyError } from '../../lib/adminErrors';
 import { useTrainingAdmin } from '../../hooks/useTraining';
 
 export default function AdminTraining() {
@@ -65,18 +66,18 @@ export default function AdminTraining() {
       }
       resetForm();
     } catch (err: any) {
-      alert(err?.message || 'Failed to save training course.');
+      alert(friendlyError(err, 'Save course', 'Your changes could not be saved. Please try again.'));
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this course from database?')) {
+    if (window.confirm('Are you sure you want to delete this course?')) {
       try {
         await remove(id);
       } catch (err: any) {
-        alert(err?.message || 'Delete operation failed.');
+        alert(friendlyError(err, 'Delete course', 'This course could not be deleted. Please try again.'));
       }
     }
   };
@@ -101,12 +102,6 @@ export default function AdminTraining() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-surface-container-low border border-outline-variant/30 rounded-xl p-4 flex items-center justify-between gap-4 text-xs">
-        <div className="flex items-center gap-2.5 text-on-surface-variant">
-          <Database size={15} className="text-tertiary shrink-0" />
-          <span><strong>PostgreSQL Database Connected:</strong> Real-time persistence via Supabase <code className="text-tertiary font-mono">training_courses</code> table.</span>
-        </div>
-      </div>
 
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -124,7 +119,7 @@ export default function AdminTraining() {
       {loading && courses.length === 0 ? (
         <div className="text-center py-20 text-on-surface-variant text-sm">
           <Loader2 size={24} className="animate-spin mx-auto mb-2 text-tertiary" />
-          <span>Loading courses from database...</span>
+          <span>Loading courses…</span>
         </div>
       ) : courses.length === 0 ? (
         <div className="text-center py-20 px-4 bg-surface-container-low rounded-xl border border-outline-variant/30">

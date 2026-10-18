@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { supabase, getStorageUrl, isSupabaseConfigured } from '../lib/supabase';
+import { supabase, getStorageUrl, isSupabaseConfigured, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
+import { FriendlyError } from '../lib/adminErrors';
 
 export interface UploadOptions {
   /** Reject files larger than this (bytes) before uploading. */
@@ -8,6 +9,8 @@ export interface UploadOptions {
   allowedTypes?: string[];
   /** Folder prefix inside the bucket, e.g. "2026/10". */
   folder?: string;
+  /** Receives upload progress from 0 to 1. */
+  onProgress?: (fraction: number) => void;
 }
 
 export interface UploadResult {
@@ -33,48 +36,78 @@ function buildFilePath(file: File, folder?: string): string {
   return folder ? `${folder}/${id}.${ext}` : `${id}.${ext}`;
 }
 
+/**
+ * Uploads straight to the Supabase Storage REST endpoint with XMLHttpRequest so the
+ * admin sees real progress (supabase-js does not expose upload progress).
+ */
+async function uploadWithProgress(bucket: string, filePath: string, file: File, onProgress?: (fraction: number) => void) {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token ?? supabaseAnonKey;
+  const encodedPath = filePath.split('/').map(encodeURIComponent).join('/');
+
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${supabaseUrl}/storage/v1/object/${bucket}/${encodedPath}`);
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.setRequestHeader('apikey', supabaseAnonKey);
+    xhr.setRequestHeader('x-upsert', 'false');
+    // File names are unique, so the CDN may cache them for a year.
+    xhr.setRequestHeader('cache-control', 'max-age=31536000');
+    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+    xhr.upload.onprogress = e => {
+      if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total);
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress?.(1);
+        resolve();
+        return;
+      }
+      let body: any = null;
+      try { body = JSON.parse(xhr.responseText); } catch { /* not JSON */ }
+      reject(Object.assign(new Error(body?.message || body?.error || `Upload failed (HTTP ${xhr.status})`), { status: xhr.status, body }));
+    };
+    xhr.onerror = () => reject(new Error('Network error during upload'));
+    xhr.send(file);
+  });
+}
+
 export function useStorage(bucket: string) {
   const [uploading, setUploading] = useState(false);
 
-  /** Validates and uploads a file; throws an Error with a user-readable message on failure. */
+  /** Validates and uploads a file; throws a FriendlyError (plain-English message) on failure. */
   const uploadFile = async (file: File, options: UploadOptions = {}): Promise<UploadResult> => {
     if (!isSupabaseConfigured) {
-      throw new Error('Supabase is not configured, so files cannot be uploaded.');
+      throw new FriendlyError('Uploading is not available in this preview.');
     }
     if (options.allowedTypes && !options.allowedTypes.includes(file.type)) {
-      throw new Error(`Unsupported file type "${file.type || 'unknown'}". Allowed: ${options.allowedTypes.join(', ')}.`);
+      throw new FriendlyError(`"${file.name}" is not a supported file type.`);
     }
     if (options.maxBytes && file.size > options.maxBytes) {
       const limitMb = Math.round(options.maxBytes / (1024 * 1024));
-      throw new Error(`File is ${(file.size / (1024 * 1024)).toFixed(1)} MB; the limit is ${limitMb} MB.`);
+      throw new FriendlyError(`"${file.name}" is ${(file.size / (1024 * 1024)).toFixed(1)} MB. The maximum is ${limitMb} MB.`);
     }
 
     setUploading(true);
     try {
       const filePath = buildFilePath(file, options.folder);
-      const { error } = await supabase.storage
-        .from(bucket)
-        .upload(filePath, file, {
-          upsert: false,
-          contentType: file.type || undefined,
-          // File names are unique, so they can be cached aggressively by the CDN.
-          cacheControl: '31536000',
-        });
-
-      if (error) {
-        const message = error.message || 'Upload failed.';
-        if (/bucket not found/i.test(message)) {
-          throw new Error(`Storage bucket "${bucket}" does not exist. Run the latest Supabase migration.`);
-        }
-        if (/row-level security|unauthorized|permission/i.test(message)) {
-          throw new Error('You do not have permission to upload. Sign in with an active admin account.');
-        }
-        if (/exceeded the maximum allowed size|too large|payload/i.test(message)) {
-          throw new Error('File exceeds the storage size limit for this bucket.');
-        }
-        throw new Error(message);
-      }
+      await uploadWithProgress(bucket, filePath, file, options.onProgress);
       return { publicUrl: getStorageUrl(bucket, filePath), path: filePath };
+    } catch (err: any) {
+      const message = err?.message || '';
+      if (/bucket not found/i.test(message)) {
+        throw new FriendlyError('This type of upload needs a one-time setup by your website developer.', err);
+      }
+      if (/row-level security|unauthori[sz]ed|permission|jwt/i.test(message) || err?.status === 401 || err?.status === 403) {
+        throw new FriendlyError('You don\'t have permission to upload. Please sign out and sign in again.', err);
+      }
+      if (/maximum allowed size|too large|payload/i.test(message) || err?.status === 413) {
+        throw new FriendlyError(`"${file.name}" is too large to upload.`, err);
+      }
+      if (/mime|not supported/i.test(message) || err?.status === 415) {
+        throw new FriendlyError(`"${file.name}" is not a supported file type.`, err);
+      }
+      throw new FriendlyError(`"${file.name}" could not be uploaded. Please check your connection and try again.`, err);
     } finally {
       setUploading(false);
     }

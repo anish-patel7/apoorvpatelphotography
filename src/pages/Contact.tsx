@@ -277,7 +277,7 @@ export default function Contact() {
       setErrors({});
     } else {
       // Submission failed: keep all inputs intact
-      setSubmitError(result.error || 'Failed to submit inquiry to studio database. Please retry or contact us directly via WhatsApp.');
+      setSubmitError(result.error || 'Sorry, your enquiry could not be sent. Please try again or contact us directly via WhatsApp.');
     }
   };
 
@@ -319,7 +319,7 @@ export default function Contact() {
           Get in Touch
         </h1>
         <p className="font-body text-[18px] text-on-surface-variant max-w-2xl mx-auto leading-relaxed">
-          Ready to capture your special moments? Submit your inquiry directly to our studio database below.
+          Ready to capture your special moments? Send us your enquiry below and we'll be in touch.
         </p>
       </header>
 

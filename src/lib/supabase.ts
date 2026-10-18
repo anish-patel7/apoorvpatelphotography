@@ -19,6 +19,10 @@ export const supabase = createClient(
   isSupabaseConfigured ? rawAnonKey! : 'anon-key-placeholder'
 );
 
+/** Raw project URL / public anon key, used for direct Storage uploads with progress events. */
+export const supabaseUrl = isSupabaseConfigured ? rawUrl! : '';
+export const supabaseAnonKey = isSupabaseConfigured ? rawAnonKey! : '';
+
 export function getStorageUrl(bucket: string, path: string): string {
   if (!isSupabaseConfigured || !rawUrl) return path;
   return `${rawUrl}/storage/v1/object/public/${bucket}/${path}`;
