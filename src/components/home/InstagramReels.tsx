@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Play, ExternalLink, ArrowUpRight, AlertCircle, Film } from 'lucide-react';
 import InstagramIcon from '../icons/InstagramIcon';
 import ReelViewerModal from '../instagram/ReelViewerModal';
@@ -7,12 +7,50 @@ import { INSTAGRAM_HANDLE, INSTAGRAM_PROFILE_URL, cleanInstagramUrl, isValidInst
 import { HOMEPAGE_REEL_LIMIT, getReelMediaType, hasPlayableMedia } from '../../utils/reelMedia';
 import type { InstagramReel } from '../../types';
 
-function ReelThumbnail({ reel }: { reel: InstagramReel }) {
-  const src = reel.thumbnail_url || reel.thumbnail || '';
+/**
+ * Card artwork. Uploaded videos show their own first frame (no thumbnail upload needed)
+ * and play muted while the pointer is over the card. Instagram reels use the saved cover
+ * image when one exists; otherwise a branded placeholder is shown.
+ */
+function ReelThumbnail({ reel, playing }: { reel: InstagramReel; playing: boolean }) {
+  const poster = reel.thumbnail_url || reel.thumbnail || '';
+  const videoSrc = reel.video_url || '';
+  const isVideo = getReelMediaType(reel) === 'video' && Boolean(videoSrc);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const [broken, setBroken] = useState(false);
-  const orientation = reel.orientation || 'portrait';
 
-  if (!src || broken) {
+  // Play while hovered; rewind to the first frame when the pointer leaves.
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (playing) {
+      v.muted = true;
+      v.play().catch(() => {});
+    } else {
+      v.pause();
+      v.currentTime = 0.1;
+    }
+  }, [playing]);
+
+  if (isVideo && !broken) {
+    const landscape = reel.orientation === 'landscape' || reel.orientation === 'square';
+    return (
+      <video
+        ref={videoRef}
+        src={`${videoSrc}#t=0.1`}
+        poster={poster || undefined}
+        muted
+        loop
+        playsInline
+        preload="metadata"
+        aria-hidden="true"
+        onError={() => setBroken(true)}
+        className={`absolute inset-0 w-full h-full bg-black transition-transform duration-700 group-hover:scale-105 ${landscape ? 'object-contain' : 'object-cover'}`}
+      />
+    );
+  }
+
+  if (!poster || broken) {
     return (
       <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-surface-container-high to-surface-container-lowest">
         {getReelMediaType(reel) === 'video'
@@ -22,12 +60,11 @@ function ReelThumbnail({ reel }: { reel: InstagramReel }) {
     );
   }
 
-  // Portrait media fills the 9:16 card. Landscape/square media is shown whole on a
-  // blurred backdrop of itself, so nothing important is cropped.
+  const orientation = reel.orientation || 'portrait';
   if (orientation === 'portrait') {
     return (
       <img
-        src={src}
+        src={poster}
         alt={reel.title}
         loading="lazy"
         decoding="async"
@@ -39,9 +76,9 @@ function ReelThumbnail({ reel }: { reel: InstagramReel }) {
 
   return (
     <>
-      <img src={src} alt="" aria-hidden="true" loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover scale-125 blur-xl opacity-60" />
+      <img src={poster} alt="" aria-hidden="true" loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover scale-125 blur-xl opacity-60" />
       <img
-        src={src}
+        src={poster}
         alt={reel.title}
         loading="lazy"
         decoding="async"
@@ -83,6 +120,7 @@ function FollowCard() {
 export default function InstagramReels() {
   const { reels, loading, error } = useReels(HOMEPAGE_REEL_LIMIT);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
   const closeViewer = useCallback(() => setActiveIndex(null), []);
 
   // useReels already returns Published + Featured only; re-check defensively so a
@@ -144,8 +182,13 @@ export default function InstagramReels() {
             const label = isVideo ? 'Watch Video' : reel.content_type === 'post' ? 'View Post' : 'Watch Reel';
 
             return (
-              <div key={reel.id} className="group relative aspect-[9/16] rounded-lg overflow-hidden bg-surface-container border border-outline-variant/20 shadow-md transition-all duration-300 hover:border-tertiary/50 hover:shadow-xl hover:-translate-y-0.5">
-                <ReelThumbnail reel={reel} />
+              <div
+                key={reel.id}
+                onMouseEnter={() => setHoveredId(reel.id)}
+                onMouseLeave={() => setHoveredId(null)}
+                className="group relative aspect-[9/16] rounded-lg overflow-hidden bg-surface-container border border-outline-variant/20 shadow-md transition-all duration-300 hover:border-tertiary/50 hover:shadow-xl hover:-translate-y-0.5"
+              >
+                <ReelThumbnail reel={reel} playing={hoveredId === reel.id} />
 
                 {/* Whole card opens the viewer */}
                 <button
