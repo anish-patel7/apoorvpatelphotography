@@ -2,6 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 
 /**
  * POST /api/reel-thumbnail  { ids: string[], broken?: string[] }   (Vercel Serverless Function)
+ * POST /api/reel-thumbnail  { check: true }  → connection status for the dashboard
+ *   (whether credentials are set and the Instagram token works; never returns secrets).
  * `broken` lists ids whose stored thumbnail no longer loads (checked by the dashboard);
  * those are treated as missing.
  *
@@ -141,6 +143,23 @@ async function oembedCover(canonicalUrl: string, appId: string, clientToken: str
   }
 }
 
+/** Dashboard diagnostics: which sources are configured and whether the Instagram token works. */
+async function connectionStatus() {
+  const igToken = process.env.INSTAGRAM_ACCESS_TOKEN;
+  const oembed = Boolean(process.env.META_APP_ID && process.env.META_CLIENT_TOKEN);
+  if (!igToken) return { configured: oembed, instagram: 'not_configured' as const, oembed };
+  try {
+    const res = await fetchWithTimeout(`${GRAPH_INSTAGRAM}/me?fields=username,account_type&access_token=${encodeURIComponent(igToken)}`);
+    const body: any = await res.json().catch(() => null);
+    if (res.ok && body?.username) {
+      return { configured: true, instagram: 'connected' as const, username: String(body.username), accountType: body.account_type || null, oembed };
+    }
+    return { configured: true, instagram: body?.error?.code === 190 ? ('token_expired' as const) : ('api_error' as const), oembed };
+  } catch {
+    return { configured: true, instagram: 'api_error' as const, oembed };
+  }
+}
+
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
@@ -174,6 +193,8 @@ export default async function handler(req: any, res: any) {
   if (typeof body === 'string') {
     try { body = JSON.parse(body); } catch { body = null; }
   }
+  if (body?.check === true) return res.status(200).json({ success: true, ...(await connectionStatus()) });
+
   const ids: string[] = Array.isArray(body?.ids)
     ? [...new Set(body.ids.filter((v: unknown) => typeof v === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(v)))] as string[]
     : [];

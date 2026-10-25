@@ -10,7 +10,7 @@ import ReelViewerModal from '../../components/instagram/ReelViewerModal';
 import ReelVideoPlayer from '../../components/instagram/ReelVideoPlayer';
 import { InlineYouTubePlayer } from '../../components/reels/InlineReelPlayers';
 import BrandedReelPoster from '../../components/reels/BrandedReelPoster';
-import { useReelThumbnails, thumbnailKind, type ThumbnailSummary } from '../../hooks/useReelThumbnails';
+import { useReelThumbnails, thumbnailKind, checkInstagramConnection, type ThumbnailSummary, type InstagramConnection } from '../../hooks/useReelThumbnails';
 import { parseYouTubeUrl, getYouTubeThumbnail } from '../../utils/youtube';
 import { isValidInstagramUrl, cleanInstagramUrl, getInstagramType } from '../../utils/instagram';
 import { useReelsAdmin } from '../../hooks/useReels';
@@ -120,9 +120,48 @@ function AdminReelThumb({ src, title, label, wide, dim }: { src: string; title: 
   return <img src={src} alt={title} loading="lazy" onError={() => setFailed(src)} className={`w-full h-full ${wide ? 'object-contain' : 'object-cover'} ${dim ? 'opacity-70' : ''}`} />;
 }
 
+/** Tells the owner whether original Instagram covers can be fetched, and what to do if not. */
+function InstagramConnectionPanel({ connection, onRecheck }: { connection: InstagramConnection; onRecheck: () => void }) {
+  if (connection.state === 'checking') return null;
+  const ok = connection.state === 'connected';
+  const title = ok
+    ? `Instagram connected (@${connection.username}) — original reel covers are added automatically.`
+    : connection.state === 'token_expired'
+      ? 'Instagram connection expired — reels are getting the branded thumbnail instead of their real cover.'
+      : 'Real Instagram covers are not switched on yet — reels without your own image get the branded thumbnail.';
+  const detail = ok
+    ? 'Click "Generate Missing Thumbnails" to replace branded thumbnails with the real covers. Works for reels posted by this account.'
+    : connection.state === 'token_expired'
+      ? 'Your developer needs to create a new Instagram access token (they expire every 60 days) and update INSTAGRAM_ACCESS_TOKEN in Vercel.'
+      : connection.state === 'unreachable'
+        ? 'The thumbnail service is not available here (it runs on the live Vercel site). '
+        : 'Your developer needs to add INSTAGRAM_ACCESS_TOKEN in Vercel (see docs/INSTAGRAM_REELS.md) and redeploy. ';
+  return (
+    <div className={`rounded-xl border p-3.5 text-xs flex items-start gap-2.5 ${ok ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400' : 'bg-amber-500/10 border-amber-500/30 text-amber-800 dark:text-amber-300'}`} role="note">
+      {ok ? <CheckCircle2 size={15} className="shrink-0 mt-0.5" /> : <Info size={15} className="shrink-0 mt-0.5" />}
+      <div className="flex-1 space-y-1">
+        <p className="font-semibold">{title}</p>
+        <p className="opacity-90">
+          {detail}
+          {!ok && 'Meanwhile, to show a reel\'s real picture: edit it and upload its original video (it will also play on your website) or a cover image.'}
+        </p>
+      </div>
+      <button type="button" onClick={onRecheck} className="shrink-0 font-semibold underline cursor-pointer">Check again</button>
+    </div>
+  );
+}
+
 export default function AdminReels() {
   const { reels, loading, error: loadError, create, update, remove, move, refetch } = useReelsAdmin();
   const { fixThumbnails, running: fixingThumbnails } = useReelThumbnails(refetch);
+  const [connection, setConnection] = useState<InstagramConnection>({ state: 'checking' });
+  const recheckConnection = () => {
+    setConnection({ state: 'checking' });
+    void checkInstagramConnection().then(setConnection);
+  };
+  useEffect(() => {
+    if (isSupabaseConfigured) void checkInstagramConnection().then(setConnection);
+  }, []);
   const videoStorage = useStorage(REEL_VIDEO_BUCKET);
   const thumbStorage = useStorage(REEL_THUMBNAIL_BUCKET);
 
@@ -707,6 +746,8 @@ export default function AdminReels() {
           </button>
         </div>
       </div>
+
+      <InstagramConnectionPanel connection={connection} onRecheck={recheckConnection} />
 
       {/* Status filters */}
       <div className="flex flex-wrap gap-2" role="tablist" aria-label="Filter reels">

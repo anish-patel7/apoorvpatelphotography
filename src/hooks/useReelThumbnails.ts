@@ -88,6 +88,31 @@ async function requestOriginalCovers(ids: string[], broken: string[]): Promise<{
   return { results, available };
 }
 
+export type InstagramConnection =
+  | { state: 'checking' | 'unreachable' | 'not_configured' | 'token_expired' | 'api_error' }
+  | { state: 'connected'; username: string };
+
+/** Asks the server whether original Instagram covers can be fetched (no secrets are returned). */
+export async function checkInstagramConnection(): Promise<InstagramConnection> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) return { state: 'unreachable' };
+  try {
+    const res = await fetch('/api/reel-thumbnail', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ check: true }),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !body?.success) return { state: 'unreachable' };
+    if (body.instagram === 'connected') return { state: 'connected', username: String(body.username || '') };
+    if (body.instagram === 'token_expired' || body.instagram === 'api_error') return { state: body.instagram };
+    return { state: 'not_configured' };
+  } catch {
+    return { state: 'unreachable' };
+  }
+}
+
 const safeId = (id: string) => id.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 80) || 'reel';
 
 export function useReelThumbnails(onSaved?: () => Promise<unknown> | void) {

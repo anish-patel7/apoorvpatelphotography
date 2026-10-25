@@ -67,6 +67,24 @@ Files are written to a fixed path per reel and the row is only updated if its th
 - It is safe to run again: it never creates duplicates and never overwrites an image you chose meanwhile.
 - A branded poster is upgraded to the original cover once the original becomes available.
 
+**Turning on real covers (one-time, by the developer)**
+
+The status panel at the top of Films & Reels shows whether this is working. Until it reports "Instagram connected", every reel without your own image gets the branded thumbnail.
+
+1. Make sure @apoorvpatel_photography is a **Professional** account (Instagram app → Settings → Account type and tools → Switch to professional account).
+2. Create a Meta app at developers.facebook.com:
+   - Add the **Instagram API with Instagram Login** product.
+   - Add the studio account as an Instagram tester and accept the invite in the Instagram app.
+3. Generate a **long-lived access token** with the `instagram_business_basic` permission. Details are in "Optional: importing new reels automatically" below.
+4. In **Vercel → Project → Settings → Environment Variables**, add `INSTAGRAM_ACCESS_TOKEN` and redeploy.
+5. In Films & Reels, click **Check again**. The panel should now say "Instagram connected (@…)".
+6. Click **Generate Missing Thumbnails**. Branded thumbnails are then replaced by the real covers.
+7. Refresh the token every 60 days. The panel warns you when it has expired.
+
+Without this setup there is no officially supported way for a website to obtain an Instagram reel's cover image. The other ways to show a reel's real picture are:
+- upload the reel's original video (a frame becomes the thumbnail, and the reel plays on the site);
+- upload a cover image.
+
 **How the original cover is fetched (server side, `api/reel-thumbnail.ts`)**
 - Caller must be a signed-in active admin. Database and storage writes use that admin's own session, so RLS applies and no service-role key is needed.
 - Source 1: Instagram API with Instagram Login.
