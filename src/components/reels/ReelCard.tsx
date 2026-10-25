@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, ExternalLink, Film, Play, X } from 'lucide-react';
 import InstagramIcon from '../icons/InstagramIcon';
+import BrandedReelPoster from './BrandedReelPoster';
 import { InlineVideoPlayer, InlineYouTubePlayer } from './InlineReelPlayers';
 import { cleanInstagramUrl, isValidInstagramUrl } from '../../utils/instagram';
 import { getReelMediaType, getReelPoster, isInlinePlayable } from '../../utils/reelMedia';
@@ -10,13 +11,19 @@ import type { InstagramReel } from '../../types';
 const CARD_CLASS =
   'group relative aspect-[9/16] rounded-lg overflow-hidden bg-surface-container border border-outline-variant/20 shadow-md transition-all duration-300';
 
-/** Card artwork before playback: saved/auto thumbnail, the video's own first frame, or a branded placeholder. */
+/**
+ * Card artwork before playback, never blank: saved thumbnail (manual, original Instagram
+ * cover or generated), the video's own first frame, or the live branded poster.
+ */
 function ReelArtwork({ reel, previewing }: { reel: InstagramReel; previewing: boolean }) {
-  const poster = getReelPoster(reel);
   const type = getReelMediaType(reel);
   const videoSrc = type === 'video' ? reel.video_url || '' : '';
   const videoRef = useRef<HTMLVideoElement>(null);
   const [broken, setBroken] = useState(false);
+  // <video poster> has no error event, so a hidden probe detects a dead thumbnail link.
+  const [posterBroken, setPosterBroken] = useState(false);
+  const savedPoster = getReelPoster(reel);
+  const poster = posterBroken ? '' : savedPoster;
   const wide = reel.orientation === 'landscape' || reel.orientation === 'square';
 
   // Uploaded videos play a silent preview while the pointer is over the card.
@@ -35,6 +42,7 @@ function ReelArtwork({ reel, previewing }: { reel: InstagramReel; previewing: bo
   if (videoSrc && !broken) {
     return (
       <>
+        {savedPoster && !posterBroken && <img src={savedPoster} alt="" hidden onError={() => setPosterBroken(true)} />}
         {poster && wide && <img src={poster} alt="" aria-hidden="true" loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover scale-125 blur-xl opacity-60" />}
         <video
           ref={videoRef}
@@ -55,11 +63,7 @@ function ReelArtwork({ reel, previewing }: { reel: InstagramReel; previewing: bo
   }
 
   if (!poster || broken) {
-    return (
-      <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-surface-container-high to-surface-container-lowest">
-        {type === 'instagram' ? <InstagramIcon size={36} className="text-tertiary/50" /> : <Film size={36} className="text-tertiary/50" />}
-      </div>
-    );
+    return <BrandedReelPoster title={reel.title} label={type === 'video' ? 'FILM' : 'REEL'} />;
   }
 
   if (!wide) {
