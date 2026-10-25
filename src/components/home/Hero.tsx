@@ -1,54 +1,53 @@
-import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 
+const BANNER_ALT =
+  'Studio — Wedding, Pre-Wedding, Event, Modelling & Outdoor Photography. Designing — Graphic Design, Photo Editing, ' +
+  'Video Editing, Logo Design, Business Cards, Brochure Design, Architecture Design, Web Design and Printing Services. ' +
+  'Instagram: apoorvpatel_photography';
+
+/**
+ * Landing banner. The artwork carries its own headline text, so it is shown uncropped
+ * on wide screens (16:9) and trimmed to the central text block on phones (5:4).
+ * It starts below the fixed navigation so the menu stays readable in light and dark themes.
+ */
 export default function Hero() {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (el) {
-      setTimeout(() => el.classList.add('visible'), 100);
-    }
-  }, []);
-
   return (
-    <header className="relative w-full h-screen flex items-center justify-center overflow-hidden">
-      <div className="absolute inset-0 z-0">
-        <img
-          src="/images/portfolio/wedding-collection/photo_02.webp"
-          alt="Bride in an ivory lehenga seated before an arched venue, photographed by Apoorv Patel"
-          className="w-full h-full object-cover opacity-60"
-          loading="eager"
-          fetchPriority="high"
-          decoding="async"
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-transparent to-background" />
+    <header className="relative w-full bg-background pt-20 md:pt-[92px]">
+      <h1 className="sr-only">Apoorvpatel Photography — Studio &amp; Designing</h1>
+
+      <div className="relative w-full aspect-[5/4] sm:aspect-[16/9] max-h-[calc(100vh-5rem)] md:max-h-[calc(100vh-92px)] overflow-hidden bg-[#141210]">
+        <picture>
+          <source
+            type="image/webp"
+            srcSet="/images/hero/studio-designing-960.webp 960w, /images/hero/studio-designing-1600.webp 1600w, /images/hero/studio-designing-2400.webp 2400w"
+            sizes="100vw"
+          />
+          <img
+            src="/images/hero/studio-designing-1600.jpg"
+            alt={BANNER_ALT}
+            width={1600}
+            height={900}
+            className="absolute inset-0 w-full h-full object-cover object-center"
+            loading="eager"
+            fetchPriority="high"
+            decoding="async"
+          />
+        </picture>
       </div>
 
-      <div
-        ref={ref}
-        className="relative z-10 text-center px-5 flex flex-col items-center gap-6 max-w-4xl mt-20 fade-in"
-      >
-        <h1 className="font-display text-[32px] md:text-[72px] text-on-background leading-[1.1] tracking-[-0.02em] font-semibold">
-          Apoorvpatel Photography
-        </h1>
-        <p className="font-body text-[18px] text-on-surface-variant italic tracking-wide">
-          "inspired by innovation"
-        </p>
-        <div className="flex flex-col sm:flex-row gap-6 mt-8">
-          <Link
-            to="/portfolio"
-            className="bg-on-background text-background font-body text-[14px] font-semibold tracking-[0.05em] px-8 py-4 rounded-full btn-cinematic hover:bg-tertiary hover:text-on-tertiary border border-on-background transition-colors"
-          >
-            View Portfolio
-          </Link>
-          <Link
-            to="/contact"
-            className="bg-transparent text-on-background font-body text-[14px] font-semibold tracking-[0.05em] px-8 py-4 rounded-full btn-cinematic border border-on-background hover:bg-on-background hover:text-background transition-colors"
-          >
-            Get a Quote
-          </Link>
-        </div>
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6 px-5 py-8 md:py-10 bg-[#141210]">
+        <Link
+          to="/portfolio"
+          className="w-full sm:w-auto text-center bg-white text-[#141210] font-body text-[14px] font-semibold tracking-[0.05em] px-8 py-4 rounded-full btn-cinematic hover:bg-[#F28C28] hover:border-[#F28C28] hover:text-white border border-white transition-colors"
+        >
+          View Portfolio
+        </Link>
+        <Link
+          to="/contact"
+          className="w-full sm:w-auto text-center bg-transparent text-white font-body text-[14px] font-semibold tracking-[0.05em] px-8 py-4 rounded-full btn-cinematic border border-white hover:bg-white hover:text-[#141210] transition-colors"
+        >
+          Get a Quote
+        </Link>
       </div>
     </header>
   );
