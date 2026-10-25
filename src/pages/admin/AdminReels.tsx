@@ -9,6 +9,8 @@ import InstagramEmbed from '../../components/instagram/InstagramEmbed';
 import ReelViewerModal from '../../components/instagram/ReelViewerModal';
 import ReelVideoPlayer from '../../components/instagram/ReelVideoPlayer';
 import { InlineYouTubePlayer } from '../../components/reels/InlineReelPlayers';
+import BrandedReelPoster from '../../components/reels/BrandedReelPoster';
+import { useReelThumbnails, thumbnailKind, type ThumbnailSummary } from '../../hooks/useReelThumbnails';
 import { parseYouTubeUrl, getYouTubeThumbnail } from '../../utils/youtube';
 import { isValidInstagramUrl, cleanInstagramUrl, getInstagramType } from '../../utils/instagram';
 import { useReelsAdmin } from '../../hooks/useReels';
@@ -104,8 +106,23 @@ function uploadFolder(): string {
   return `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
+const THUMBNAIL_LABEL: Record<ReturnType<typeof thumbnailKind>, string> = {
+  manual: 'Your thumbnail',
+  instagram: 'Original Instagram cover',
+  generated: 'Automatic thumbnail',
+  missing: 'Branded placeholder',
+};
+
+/** Dashboard card image; falls back to the branded poster when missing or broken. */
+function AdminReelThumb({ src, title, label, wide, dim }: { src: string; title: string; label: string; wide: boolean; dim: boolean }) {
+  const [failed, setFailed] = useState<string | null>(null);
+  if (!src || failed === src) return <BrandedReelPoster title={title} label={label} className={dim ? 'opacity-70' : ''} />;
+  return <img src={src} alt={title} loading="lazy" onError={() => setFailed(src)} className={`w-full h-full ${wide ? 'object-contain' : 'object-cover'} ${dim ? 'opacity-70' : ''}`} />;
+}
+
 export default function AdminReels() {
   const { reels, loading, error: loadError, create, update, remove, move, refetch } = useReelsAdmin();
+  const { fixThumbnails, running: fixingThumbnails } = useReelThumbnails(refetch);
   const videoStorage = useStorage(REEL_VIDEO_BUCKET);
   const thumbStorage = useStorage(REEL_THUMBNAIL_BUCKET);
 
@@ -119,7 +136,7 @@ export default function AdminReels() {
   const [editing, setEditing] = useState<InstagramReel | null>(null);
   const [form, setForm] = useState<ReelForm>(() => emptyForm(1));
   const [formError, setFormError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [notice, setNotice] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [videoStage, setVideoStage] = useState<string | null>(null);
@@ -145,7 +162,8 @@ export default function AdminReels() {
 
   useEffect(() => {
     if (!notice) return;
-    const timer = setTimeout(() => setNotice(null), notice.type === 'error' ? 7000 : 4000);
+    if (notice.type === 'info') return; // progress messages stay until replaced
+    const timer = setTimeout(() => setNotice(null), notice.type === 'error' ? 7000 : 5000);
     return () => clearTimeout(timer);
   }, [notice]);
 
@@ -473,24 +491,76 @@ export default function AdminReels() {
 
     setSaving(true);
     try {
+      let savedId: string | null = null;
+      let savedText: string;
       if (editing) {
         await update(editing.id, payload);
+        savedId = editing.id;
         // Remove files this entry no longer uses.
         if (editing.video_url && editing.video_url !== finalVideoUrl) await deleteStoredFile(editing.video_url, editing.id);
         if (editing.thumbnail_url && editing.thumbnail_url !== finalThumbnail) await deleteStoredFile(editing.thumbnail_url, editing.id);
-        setNotice({ type: 'success', text: 'Your changes have been saved.' });
+        savedText = 'Your changes have been saved.';
       } else {
-        await create(payload);
-        setNotice({ type: 'success', text: form.published ? 'Published — it is now on your website.' : 'Saved as a draft.' });
+        const created: any = await create(payload);
+        savedId = Array.isArray(created) && created[0]?.id ? String(created[0].id) : null;
+        savedText = form.published ? 'Published — it is now on your website.' : 'Saved as a draft.';
       }
+      setNotice({ type: 'success', text: savedText });
       await discardSessionUploads([finalVideoUrl || '', finalThumbnail]);
       setShowForm(false);
       setEditing(null);
       setLocalPreviewUrl(null);
+      // No thumbnail chosen: fetch the original cover, or apply a branded one, automatically.
+      if (savedId && !finalThumbnail && effectiveMediaType !== 'youtube') {
+        void autoThumbnail(savedId, savedText);
+      }
     } catch (err: any) {
       setFormError(friendlyError(err, 'Save reel', 'Your reel could not be saved. Please try again.'));
     } finally {
       setSaving(false);
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // Automatic thumbnails
+  // ---------------------------------------------------------------------------
+  const describeSummary = (s: ThumbnailSummary): string => {
+    const parts: string[] = [];
+    if (s.original) parts.push(`${s.original} original Instagram cover${s.original === 1 ? '' : 's'} added`);
+    if (s.frame) parts.push(`${s.frame} thumbnail${s.frame === 1 ? '' : 's'} created from video`);
+    if (s.branded) parts.push(`${s.branded} branded thumbnail${s.branded === 1 ? '' : 's'} applied`);
+    if (s.failed) parts.push(`${s.failed} could not be updated — please try again`);
+    return parts.join(' · ');
+  };
+
+  /** Runs after saving an entry without a thumbnail. Never replaces a hand-picked image. */
+  const autoThumbnail = async (id: string, savedText: string) => {
+    const fresh = await refetch();
+    const reel = fresh.find(r => r.id === id);
+    if (!reel) return;
+    setNotice({ type: 'info', text: `${savedText} Fetching Reel thumbnail…` });
+    const result = await fixThumbnails([reel], text => setNotice({ type: 'info', text }));
+    if (result.original) setNotice({ type: 'success', text: `${savedText} Thumbnail added from the original Instagram cover.` });
+    else if (result.frame) setNotice({ type: 'success', text: `${savedText} Thumbnail successfully generated from the video.` });
+    else if (result.branded) setNotice({ type: 'success', text: `${savedText} Original cover unavailable; branded thumbnail applied.` });
+    else if (result.failed) setNotice({ type: 'error', text: `${savedText} The thumbnail could not be created — use "Generate Missing Thumbnails" to try again.` });
+    else setNotice({ type: 'success', text: savedText });
+  };
+
+  const missingThumbnailCount = reels.filter(r => getReelMediaType(r) !== 'youtube' && thumbnailKind(r.thumbnail_url) === 'missing').length;
+
+  const handleGenerateMissing = async () => {
+    setNotice({ type: 'info', text: 'Checking your reels for missing thumbnails…' });
+    const result = await fixThumbnails(reels, text => setNotice({ type: 'info', text }));
+    const changed = result.original + result.frame + result.branded;
+    const detail = describeSummary(result);
+    if (!changed && !result.failed) {
+      setNotice({ type: 'success', text: 'Every reel already has a thumbnail. Nothing needed changing.' });
+    } else {
+      setNotice({
+        type: result.failed && !changed ? 'error' : 'success',
+        text: `${detail}.${result.branded && result.originalsUnavailable ? ' Original Instagram covers need the Instagram connection set up by your developer.' : ''}`,
+      });
     }
   };
 
@@ -575,10 +645,12 @@ export default function AdminReels() {
           className={`px-4 py-3 rounded-xl flex items-center gap-2.5 text-sm shadow-xs border ${
             notice.type === 'success'
               ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
-              : 'bg-error/10 border-error/30 text-error'
+              : notice.type === 'info'
+                ? 'bg-tertiary/10 border-tertiary/30 text-tertiary'
+                : 'bg-error/10 border-error/30 text-error'
           }`}
         >
-          {notice.type === 'success' ? <CheckCircle2 size={16} className="shrink-0" /> : <AlertTriangle size={16} className="shrink-0" />}
+          {notice.type === 'success' ? <CheckCircle2 size={16} className="shrink-0" /> : notice.type === 'info' ? <Loader2 size={16} className="shrink-0 animate-spin" /> : <AlertTriangle size={16} className="shrink-0" />}
           <span>{notice.text}</span>
         </div>
       )}
@@ -618,6 +690,15 @@ export default function AdminReels() {
             {syncing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />} Import from Instagram
           </button>
           )}
+          <button
+            onClick={() => void handleGenerateMissing()}
+            disabled={fixingThumbnails || !isSupabaseConfigured || reels.length === 0}
+            className="flex items-center gap-2 px-3.5 py-2.5 border border-outline-variant/40 text-on-surface text-sm font-semibold rounded-lg hover:border-tertiary/60 hover:text-tertiary transition-colors cursor-pointer disabled:opacity-50"
+            title="Fetch original covers or create branded thumbnails for reels without one. Images you uploaded are never replaced."
+          >
+            {fixingThumbnails ? <Loader2 size={15} className="animate-spin" /> : <ImageIcon size={15} />} Generate Missing Thumbnails
+            {missingThumbnailCount > 0 && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-tertiary text-on-tertiary">{missingThumbnailCount}</span>}
+          </button>
           <button
             onClick={openCreate}
             className="flex items-center gap-2 px-4 py-2.5 bg-tertiary text-on-tertiary text-sm font-semibold rounded-lg hover:bg-tertiary-fixed transition-colors shadow-xs cursor-pointer"
@@ -684,14 +765,7 @@ export default function AdminReels() {
                   title="Preview"
                   disabled={missingMedia}
                 >
-                  {thumb ? (
-                    <img src={thumb} alt={reel.title} loading="lazy" className={`w-full h-full ${reel.orientation && reel.orientation !== 'portrait' ? 'object-contain' : 'object-cover'} ${isPublished ? '' : 'opacity-70'}`} />
-                  ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-on-surface-variant/50">
-                      {type === 'instagram' ? <InstagramIcon size={32} /> : <Film size={32} />}
-                      {!missingMedia && type === 'instagram' && <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 px-2 text-center">No cover image — edit to add one</span>}
-                    </div>
-                  )}
+                  <AdminReelThumb src={thumb} title={reel.title} label={type === 'video' ? 'FILM' : 'REEL'} wide={Boolean(reel.orientation && reel.orientation !== 'portrait')} dim={!isPublished} />
                   {!missingMedia && (
                     <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30">
                       <span className="w-10 h-10 rounded-full bg-black/60 border border-tertiary/50 flex items-center justify-center"><Play size={16} className="text-tertiary ml-0.5" fill="currentColor" /></span>
@@ -721,7 +795,9 @@ export default function AdminReels() {
 
                 <div className="p-3 flex-1 flex flex-col gap-2.5">
                   <p className="text-xs font-semibold text-on-surface line-clamp-2 min-h-[2rem]" title={reel.title}>{reel.title || 'Untitled'}</p>
-                  <p className="text-[10px] text-on-surface-variant -mt-1.5">Order #{reel.display_order ?? 0}</p>
+                  <p className="text-[10px] text-on-surface-variant -mt-1.5">
+                    Order #{reel.display_order ?? 0} · {type === 'youtube' && !reel.thumbnail_url ? 'YouTube thumbnail' : THUMBNAIL_LABEL[thumbnailKind(reel.thumbnail_url)]}
+                  </p>
 
                   <div className="grid grid-cols-2 gap-1.5">
                     <button
@@ -896,7 +972,7 @@ export default function AdminReels() {
               {/* Thumbnail / cover image */}
               <div>
                 <div className="flex items-center justify-between mb-1.5 gap-2">
-                  <span className={labelBase}>{form.source === 'instagram' && !form.videoUrl ? 'Cover image (recommended)' : 'Thumbnail'}</span>
+                  <span className={labelBase}>{form.source === 'instagram' && !form.videoUrl ? 'Cover image (optional)' : 'Thumbnail'}</span>
                   <div className="flex items-center gap-3">
                     {(localPreviewUrl || form.videoUrl) && form.source !== 'youtube' && (
                       <button type="button" onClick={() => void regenerateThumbnail()} disabled={framing || Boolean(videoStage)} className="text-xs text-tertiary font-semibold flex items-center gap-1 hover:underline cursor-pointer disabled:opacity-50">
@@ -915,7 +991,9 @@ export default function AdminReels() {
                   return (
                     <div className="flex gap-3 items-center">
                       <div className="w-16 aspect-[9/16] rounded-md border border-outline-variant/30 bg-surface-container-lowest overflow-hidden shrink-0 flex items-center justify-center">
-                        {shown ? <img src={shown} alt="Thumbnail preview" className={`w-full h-full ${form.orientation === 'portrait' ? 'object-cover' : 'object-contain'}`} /> : <ImageIcon size={18} className="text-on-surface-variant/40" />}
+                        {shown
+                          ? <img src={shown} alt="Thumbnail preview" className={`w-full h-full ${form.orientation === 'portrait' ? 'object-cover' : 'object-contain'}`} />
+                          : form.source === 'instagram' ? <span className="relative block w-full h-full"><BrandedReelPoster title={form.title} /></span> : <ImageIcon size={18} className="text-on-surface-variant/40" />}
                       </div>
                       <p className="text-[11px] text-on-surface-variant flex-1">
                         {form.thumbnail
@@ -924,7 +1002,7 @@ export default function AdminReels() {
                             ? (parsedYouTube ? "Using YouTube's thumbnail. Upload an image to replace it." : "YouTube's thumbnail appears here once you paste a link.")
                             : form.source === 'upload' || form.videoUrl
                               ? 'Created automatically from your video after upload. You can replace it.'
-                              : 'Upload a screenshot of the reel cover — Instagram does not share cover images with other websites.'}
+                              : "Optional. When you save, the original Instagram cover is added automatically if your Instagram account is connected; otherwise a branded thumbnail like this one is created."}
                         {' '}JPG, PNG or WebP · large photos are resized automatically.
                       </p>
                     </div>

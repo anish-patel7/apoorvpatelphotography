@@ -40,6 +40,45 @@ YouTube: paste `youtube.com/shorts/ID`, `youtube.com/watch?v=ID` or `youtu.be/ID
 Shorts default to portrait and other videos to landscape. The thumbnail comes from `i.ytimg.com` (public, permanent),
 and you can replace it with an uploaded image.
 
+## Thumbnails — never blank
+
+Priority everywhere a reel is shown (homepage cards, mobile, admin previews):
+
+1. **Your thumbnail.** An image uploaded or pasted in the admin is never replaced automatically.
+2. **The original Instagram cover**, fetched through Meta's official API and copied to
+   `reel-thumbnails/instagram/<shortcode>.jpg`.
+3. **An automatic thumbnail.** Uploaded videos use a frame of the video
+   (`generated/<id>-frame.jpg`). Instagram links get the branded Apoorv Patel Photography poster
+   (`generated/<id>.jpg`).
+4. If none of these are saved yet, or the stored image link is broken, the same branded poster
+   is drawn live. A card is never black or empty.
+
+**When you save an Instagram reel without a thumbnail**, the dashboard calls `/api/reel-thumbnail`.
+It shows "Fetching Reel thumbnail…", then one of these messages:
+- "Thumbnail added from the original Instagram cover."
+- "Original cover unavailable; branded thumbnail applied."
+
+**Generate Missing Thumbnails** (in Films & Reels) repairs existing reels:
+- It finds reels with no thumbnail or a broken image link.
+- It tries the original Instagram cover first, then a video frame or the branded poster.
+- It refreshes the list and shows a summary.
+
+Files are written to a fixed path per reel and the row is only updated if its thumbnail is still the value that was checked. This means:
+- It is safe to run again: it never creates duplicates and never overwrites an image you chose meanwhile.
+- A branded poster is upgraded to the original cover once the original becomes available.
+
+**How the original cover is fetched (server side, `api/reel-thumbnail.ts`)**
+- Caller must be a signed-in active admin. Database and storage writes use that admin's own session, so RLS applies and no service-role key is needed.
+- Source 1: Instagram API with Instagram Login.
+  - Reads the studio account's own recent media (`/me/media`, `thumbnail_url`; up to 200 posts) with `INSTAGRAM_ACCESS_TOKEN` (permission `instagram_business_basic`).
+  - Covers **only reels posted by that account**.
+- Source 2 (optional): Meta oEmbed Read with `META_APP_ID` + `META_CLIENT_TOKEN`.
+  - Meta may leave `thumbnail_url` out of the response, in which case it returns nothing.
+- Instagram pages are never scraped and no unofficial endpoints are used.
+- Only image URLs returned by Meta on Meta CDN hosts (`*.cdninstagram.com`, `*.fbcdn.net`) are downloaded. The server never fetches user-supplied URLs (SSRF protection).
+- Downloads are HTTPS only, with an 8 s timeout, one retry, a 5 MB cap, and JPEG/PNG/WebP type and signature checks.
+- Without credentials, or when Meta doesn't return a cover, the branded poster is used and the dashboard explains why.
+
 ## One-time Supabase setup
 
 0. **YouTube support needs migration 012** (`supabase/migrations/012_reels_youtube_and_description.sql`,

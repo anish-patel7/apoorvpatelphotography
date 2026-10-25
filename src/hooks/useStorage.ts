@@ -12,6 +12,10 @@ export interface UploadOptions {
   folder?: string;
   /** Receives upload progress from 0 to 1. */
   onProgress?: (fraction: number) => void;
+  /** Exact object path (instead of a random name in `folder`), e.g. "generated/<id>.jpg". */
+  path?: string;
+  /** Replace an existing object at `path` (makes repeated runs idempotent). */
+  upsert?: boolean;
 }
 
 export interface UploadResult {
@@ -41,7 +45,7 @@ function buildFilePath(file: File, folder?: string): string {
  * Uploads straight to the Supabase Storage REST endpoint with XMLHttpRequest so the
  * admin sees real progress (supabase-js does not expose upload progress).
  */
-async function uploadWithProgress(bucket: string, filePath: string, file: File, onProgress?: (fraction: number) => void) {
+async function uploadWithProgress(bucket: string, filePath: string, file: File, onProgress?: (fraction: number) => void, upsert = false) {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token ?? supabaseAnonKey;
   const encodedPath = filePath.split('/').map(encodeURIComponent).join('/');
@@ -51,8 +55,9 @@ async function uploadWithProgress(bucket: string, filePath: string, file: File, 
     xhr.open('POST', `${supabaseUrl}/storage/v1/object/${bucket}/${encodedPath}`);
     xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     xhr.setRequestHeader('apikey', supabaseAnonKey);
-    xhr.setRequestHeader('x-upsert', 'false');
-    // File names are unique, so the CDN may cache them for a year.
+    xhr.setRequestHeader('x-upsert', upsert ? 'true' : 'false');
+    // Random names never change, so the CDN may cache them for a year. Fixed (upserted)
+    // paths are saved with a ?v= version instead, which also refreshes caches.
     xhr.setRequestHeader('cache-control', 'max-age=31536000');
     xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
     xhr.upload.onprogress = e => {
@@ -96,8 +101,8 @@ export function useStorage(bucket: string) {
 
     setUploading(true);
     try {
-      const filePath = buildFilePath(file, options.folder);
-      await uploadWithProgress(bucket, filePath, file, options.onProgress);
+      const filePath = options.path || buildFilePath(file, options.folder);
+      await uploadWithProgress(bucket, filePath, file, options.onProgress, options.upsert);
       return { publicUrl: getStorageUrl(bucket, filePath), path: filePath };
     } catch (err: any) {
       const message = err?.message || '';
